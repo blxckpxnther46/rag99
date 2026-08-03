@@ -1,0 +1,12 @@
+{
+  "name": "rag99",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["api", "web"],
+  "scripts": {
+    "dev:api": "npm run dev --workspace api",
+    "dev:web": "npm run dev --workspace web",
+    "build": "npm run build --workspace api && npm run build --workspace web",
+    "self-check": "npm run self-check --workspace api"
+  }
+}
