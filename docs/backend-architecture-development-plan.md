@@ -322,7 +322,7 @@ rag99/{userId}/{chatId}/{documentId}-{safeFileName}
 Safety rules:
 
 - keep Cloudinary credentials in backend environment variables,
-- upload as `resource_type: raw`,
+- upload as `resource_type: image` for PDFs to ensure proper browser loading, and `raw` for text/docx documents,
 - normalize filenames,
 - use UUIDs in stored names,
 - block path traversal,
@@ -364,7 +364,7 @@ Search constraints:
 - always filter by `chatId`,
 - only use chunks from `READY` documents,
 - order by vector distance,
-- limit top results, recommended top 5.
+- limit top results, recommended top 4.
 
 Purpose:
 
@@ -493,6 +493,7 @@ Reason:
 - Prisma schema.
 - migrations.
 - register/login APIs.
+- Google OAuth token verification and sign-in API.
 - JWT helper.
 - bcrypt helper.
 - auth middleware.
@@ -507,11 +508,12 @@ Reason:
 
 - upload validation.
 - Cloudinary raw file storage.
-- document metadata.
-- document delete.
+- document metadata database insertion.
+- document delete & Cloudinary raw asset deletion.
 
 ### Phase 4: RAG Backend
 
+- Asynchronous background execution flow.
 - text extraction.
 - chunking.
 - embeddings.
@@ -526,6 +528,7 @@ Reason:
 - request logging.
 - critical tests.
 - README setup instructions.
+
 
 ## Milestones
 

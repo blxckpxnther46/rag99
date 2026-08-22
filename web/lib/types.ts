@@ -11,9 +11,14 @@ export type Document = {
   sizeBytes: number;
 };
 
+export type CitationType = {
+  source: string;
+  chunk: number;
+};
+
 export type Message = {
   id: string;
   role: string;
   content: string;
-  citations?: unknown;
+  citations?: CitationType[];
 };

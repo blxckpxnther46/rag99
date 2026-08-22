@@ -7,7 +7,7 @@ type RetrievedChunk = {
   distance: number;
 };
 
-export async function retrieve(chatId: string, vector: number[], limit = 6) {
+export async function retrieve(chatId: string, vector: number[], limit = 4) {
   const literal = `[${vector.join(",")}]`;
 
   return prisma.$queryRawUnsafe<RetrievedChunk[]>(

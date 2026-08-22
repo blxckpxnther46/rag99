@@ -34,19 +34,22 @@ This is the core philosophy of rag99:
 
 1. User uploads files into a chat.
 2. Backend validates file count, type, and size.
-3. File is stored locally.
-4. Document metadata is stored with `PROCESSING` status.
-5. Text is extracted.
-6. Text is chunked.
-7. Each chunk is embedded.
-8. Chunks and embeddings are stored.
-9. Document status becomes `READY`.
+3. Original file is uploaded to Cloudinary raw storage (safe & durable cloud storage).
+4. Document metadata is stored in the database with `PROCESSING` status.
+5. The backend immediately returns the created document metadata to the frontend (under 1s).
+6. In a background, non-blocking promise:
+   - Text is extracted from the buffer.
+   - Text is chunked.
+   - Each chunk is embedded.
+   - Chunks and embeddings are stored in PostgreSQL using pgvector.
+   - Document status is updated to `READY`.
 
-If any step fails:
+If any background step fails:
 
 - document status becomes `FAILED`,
 - error message is stored,
 - failed document is excluded from retrieval.
+
 
 ## Document Parsing
 
@@ -94,13 +97,13 @@ Avoid:
 
 Recommended Version 1 chunk size:
 
-- **800-1000 tokens** or about **3000-4000 characters**.
+- **2000 characters**.
 
 Reason:
 
 - large enough to preserve meaning,
 - small enough for precise retrieval,
-- practical for 5-6 documents.
+- optimal for token efficiency.
 
 If token counting is not available immediately:
 
@@ -118,7 +121,7 @@ Add when:
 
 Recommended overlap:
 
-- **100-150 tokens** or about **400-600 characters**.
+- **200 characters**.
 
 Reason:
 
@@ -184,7 +187,7 @@ Practical rule:
 Example:
 
 ```prisma
-embedding Unsupported("vector(1536)")
+embedding Unsupported("vector(1024)")
 ```
 
 ## Similarity Search
@@ -219,7 +222,7 @@ Reason:
 3. Store user message.
 4. Generate question embedding.
 5. Search chunks for selected chat.
-6. Keep top 5 chunks.
+6. Keep top 4 chunks.
 7. Apply similarity threshold.
 8. If no useful chunks are found, return uncertainty answer.
 9. Build prompt from retrieved chunks.
@@ -228,7 +231,7 @@ Reason:
 
 Recommended top-k:
 
-- 5 chunks.
+- 4 chunks.
 
 Reason:
 
@@ -248,17 +251,17 @@ Prompt components:
 System instruction:
 
 ```text
-You are rag99, an AI-powered document knowledge assistant.
-Answer only using the retrieved context.
-If the context does not contain enough information, say that the uploaded documents do not provide enough evidence.
-Do not invent facts or citations.
+You are a helpful AI assistant for rag99 (a document RAG application combined with a general AI chatbot fallback).
+Use the provided Evidence as your primary source of truth if the user's question relates to the uploaded documents, and cite your sources.
+If the question is unrelated to the documents (e.g. general knowledge, programming assignments, or generic questions) or if no evidence is provided, use your general knowledge to answer fully and helpful.
+Only generate citations when referencing the provided Evidence.
 ```
 
 Why:
 
-- directly supports hallucination reduction,
-- makes viva explanation simple,
-- aligns with the product philosophy.
+- directly supports a premium Hybrid Copilot experience,
+- answers general queries (like coding or assignments) while keeping RAG as the primary truth source,
+- keeps viva evaluation clear through dynamic citation lists.
 
 ## Context Construction
 

@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 import { prisma } from "../db/prisma.js";
 import env from "../config.js";
 import { AppError } from "../http/errors.js";
@@ -56,3 +57,43 @@ function createTokenResponse(user: { id: string; email: string; name: string }) 
     },
   };
 }
+
+export async function loginWithGoogle(credential: string) {
+  if (!env.GOOGLE_CLIENT_ID) {
+    throw new AppError(500, "Google OAuth is not configured on this server.");
+  }
+
+  const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+  if (!res.ok) {
+    throw new AppError(401, "Invalid Google credential");
+  }
+
+  const payload = await res.json() as any;
+  if (payload.aud !== env.GOOGLE_CLIENT_ID) {
+    throw new AppError(401, "Google client ID mismatch");
+  }
+
+  if (payload.email_verified !== "true" && payload.email_verified !== true) {
+    throw new AppError(401, "Google email not verified");
+  }
+
+  const email = String(payload.email);
+  const name = String(payload.name ?? "Google User");
+
+  let user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        email,
+        name,
+        passwordHash: await bcrypt.hash(crypto.randomUUID(), 12),
+      },
+    });
+  }
+
+  return createTokenResponse(user);
+}
+

@@ -17,6 +17,7 @@ export const titleSchema = z.object({
 
 export const messageSchema = z.object({
   content: z.string().trim().min(1).max(10000),
+  mode: z.enum(["concise", "explain"]).default("concise"),
 });
 
 export const chatParamsSchema = z.object({

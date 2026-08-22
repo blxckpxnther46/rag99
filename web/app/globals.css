@@ -8,6 +8,53 @@
 
 body {
   margin: 0;
-  background: #f8fafc;
-  color: #172033;
+  background: #090A0F;
+  color: #e3e3e3;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-slide {
+  animation: fadeInSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spinSlow 25s linear infinite;
+  transform-origin: center;
+}
+
+/* Glass panel utility */
+.glass-panel {
+  background: rgba(15, 18, 28, 0.72);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Blue ambient atmospheric glow */
+.bg-glow-radial {
+  background: radial-gradient(
+    circle at center,
+    rgba(25, 55, 130, 0.22) 0%,
+    rgba(15, 35, 90, 0.1) 35%,
+    rgba(5, 10, 25, 0.02) 65%,
+    transparent 80%
+  );
 }

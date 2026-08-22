@@ -2,11 +2,18 @@
   "name": "rag99",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["api", "web"],
+  "workspaces": [
+    "api",
+    "web"
+  ],
   "scripts": {
+    "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "npm run dev --workspace api",
     "dev:web": "npm run dev --workspace web",
     "build": "npm run build --workspace api && npm run build --workspace web",
     "self-check": "npm run self-check --workspace api"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4"
   }
 }

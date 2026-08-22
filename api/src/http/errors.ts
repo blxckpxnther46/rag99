@@ -35,6 +35,8 @@ export function errorResponse(error: unknown) {
     }
   }
 
+  console.error("Unhandled API Error:", error);
+
   return {
     status: 500,
     body: { error: "Internal server error" },

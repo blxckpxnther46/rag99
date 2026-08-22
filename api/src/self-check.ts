@@ -1,7 +1,7 @@
 import { chunkText } from "./documents/chunk-text.js";
 import { parseAnswer } from "./ai/prompt-builder.js";
 
-if (chunkText("a".repeat(9000)).length !== 4) {
+if (chunkText("a".repeat(9000)).length !== 5) {
   throw new Error("chunking check failed");
 }
 

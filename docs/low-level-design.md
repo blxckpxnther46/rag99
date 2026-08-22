@@ -246,7 +246,7 @@ model DocumentChunk {
   content    String
   chunkIndex Int
   pageNumber Int?
-  embedding  Unsupported("vector(1536)")
+  embedding  Unsupported("vector(1024)")
   createdAt  DateTime @default(now())
 
   @@index([documentId])
@@ -357,7 +357,43 @@ Status codes:
 - `429 Too Many Requests`
 - `500 Internal Server Error`
 
+### POST `/api/auth/google`
+
+Purpose: authenticate or register a user via Google OAuth 2.0.
+
+Authentication required: no.
+
+Request:
+
+```json
+{
+  "credential": "google-id-token-jwt"
+}
+```
+
+Validation:
+
+- `credential`: string, minimum 1 character.
+
+Response `200`:
+
+```json
+{
+  "user": { "id": "uuid", "name": "Laksh", "email": "laksh@example.com" },
+  "token": "jwt"
+}
+```
+
+Status codes:
+
+- `200 OK`
+- `400 Bad Request`
+- `401 Unauthorized`
+- `429 Too Many Requests`
+- `500 Internal Server Error`
+
 ### GET `/api/chats`
+
 
 Purpose: list chats for current user.
 
@@ -812,13 +848,16 @@ Validation error response:
 rag99/{userId}/{chatId}/{documentId}-{safeFileName}
 ```
 
-7. Create `Document` row with `PROCESSING`.
-8. Extract text.
-9. Chunk text.
-10. Generate embeddings.
-11. Insert `DocumentChunk` rows.
-12. Mark document `READY`.
-13. If processing fails, mark document `FAILED` and store error message.
+7. Create `Document` row in the database with status `PROCESSING`.
+8. Immediately return `201 Created` with the `Document` object to the client.
+9. Launch the background Promise loop:
+   - Extract text from buffer.
+   - Chunk text.
+   - Generate embeddings for each chunk.
+   - Insert `DocumentChunk` rows using parameterized raw SQL queries.
+   - On success, update document status to `READY`.
+   - On failure, update document status to `FAILED` and record the error message.
+
 
 Storage safety rules:
 
@@ -1004,11 +1043,11 @@ Optional:
 ```env
 DATABASE_URL="postgresql://user:password@localhost:5432/rag99"
 JWT_SECRET="replace-with-a-long-random-secret"
-AI_BASE_URL="https://api.example.com/v1"
-AI_API_KEY="replace-with-provider-key"
-AI_CHAT_MODEL="provider-chat-model"
-AI_EMBEDDING_MODEL="provider-embedding-model"
-EMBEDDING_DIMENSION="1536"
+AI_BASE_URL="https://openrouter.ai/api/v1"
+AI_API_KEY="replace-with-openrouter-api-key"
+AI_CHAT_MODEL="meta-llama/llama-3.3-70b-instruct"
+AI_EMBEDDING_MODEL="openai/text-embedding-3-small"
+EMBEDDING_DIMENSION="1024"
 MAX_UPLOAD_MB="10"
 CLOUDINARY_CLOUD_NAME="replace-with-cloud-name"
 CLOUDINARY_API_KEY="replace-with-cloudinary-api-key"

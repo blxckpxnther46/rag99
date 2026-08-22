@@ -53,7 +53,7 @@ CREATE TABLE "DocumentChunk" (
   "content" TEXT NOT NULL,
   "chunkIndex" INTEGER NOT NULL,
   "pageNumber" INTEGER,
-  "embedding" vector(1536) NOT NULL,
+  "embedding" vector(1024) NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "DocumentChunk_pkey" PRIMARY KEY ("id")
 );

@@ -21,7 +21,7 @@ export async function addDocument(
   chatId: string,
   file: Express.Multer.File,
 ) {
-  await ownedChat(userId, chatId);
+  const chat = await ownedChat(userId, chatId);
 
   const saved = await saveUpload(userId, chatId, file);
 
@@ -37,12 +37,35 @@ export async function addDocument(
     },
   });
 
+  if (chat && chat.title === "New Chat") {
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: { title: file.originalname },
+    });
+  }
+
+  // Trigger background parsing, chunking and embedding without awaiting it
+  processDocumentInBackground(document.id, chatId, file.buffer, file.mimetype, file.originalname)
+    .catch((error) => {
+      console.error(`Background ingestion promise rejected for document ${document.id}:`, error);
+    });
+
+  return document;
+}
+
+async function processDocumentInBackground(
+  documentId: string,
+  chatId: string,
+  buffer: Buffer,
+  mimeType: string,
+  originalName: string,
+) {
   try {
-    const text = await extractText(file.buffer, file.mimetype, file.originalname);
+    const text = await extractText(buffer, mimeType, originalName);
     const chunks = chunkText(text);
 
     for (let index = 0; index < chunks.length; index += 1) {
-      const vector = await embed(chunks[index]);
+      const vector = await embed(chunks[index], "passage");
 
       await prisma.$executeRawUnsafe(
         `INSERT INTO "DocumentChunk"
@@ -50,7 +73,7 @@ export async function addDocument(
          VALUES
            ($1, $2, $3, $4, $5, $6::vector, NOW())`,
         crypto.randomUUID(),
-        document.id,
+        documentId,
         chatId,
         chunks[index],
         index,
@@ -58,22 +81,22 @@ export async function addDocument(
       );
     }
 
-    return prisma.document.update({
-      where: { id: document.id },
+    await prisma.document.update({
+      where: { id: documentId },
       data: { status: "READY" },
     });
   } catch (error) {
+    console.error(`Failed to process document ${documentId}:`, error);
     await prisma.document.update({
-      where: { id: document.id },
+      where: { id: documentId },
       data: {
         status: "FAILED",
         errorMessage: error instanceof Error ? error.message : "Processing failed",
       },
     });
-
-    throw error;
   }
 }
+
 
 export async function removeDocument(userId: string, documentId: string) {
   const document = await prisma.document.findFirst({

@@ -193,6 +193,7 @@ The product should avoid pretending to be more advanced than it is. A reliable s
 |---|---|---|
 | Must | User registration with email, name, and password | Required for private user-owned data |
 | Must | User login with JWT response | Demonstrates API authentication |
+| Must | Google OAuth login and registration | Provides modern OAuth authentication flow |
 | Must | bcrypt password hashing | Prevents storing plaintext passwords |
 | Must | Protected frontend routes | Prevents unauthenticated access to app pages |
 | Must | Authentication middleware | Centralizes JWT verification |
@@ -213,12 +214,14 @@ The product should avoid pretending to be more advanced than it is. A reliable s
 | Priority | Requirement | Reason |
 |---|---|---|
 | Must | Upload documents per chat | Core knowledge base behavior |
-| Must | Store uploaded files locally | Fastest realistic Version 1 storage |
+| Must | Store uploaded files on Cloudinary raw storage | Secure and durable cloud-based storage |
+| Must | Asynchronous document processing | Moves heavy text extraction & embedding to the background |
 | Must | Validate file type and size | Prevents unsupported and unsafe uploads |
 | Must | Extract text | Required before chunking and embeddings |
 | Must | Store document metadata | Supports document list and citations |
 | Must | Delete documents and related chunks | Keeps retrieval accurate |
 | Should | Show processing status | Helps user understand indexing progress |
+
 
 Recommended Version 1 file support:
 
@@ -413,7 +416,7 @@ Why for rag99 Version 1:
 Alternatives:
 
 - Direct OpenAI API: mature and well documented.
-- NVIDIA NIM API: OpenAI-compatible and acceptable for project requirements.
+- OpenRouter/Groq Pool: provides rotation and high reliability.
 - Local LLM: avoids API dependency but adds hardware and setup risk.
 
 Recommendation:
@@ -423,7 +426,7 @@ Recommendation:
 Why for rag99 Version 1:
 
 - Keeps code provider-flexible.
-- Allows NVIDIA NIM or another OpenAI-compatible endpoint without changing app architecture.
+- Allows OpenRouter/Groq or another OpenAI-compatible endpoint without changing app architecture.
 - Easier to demo than local model setup.
 
 ### File Storage

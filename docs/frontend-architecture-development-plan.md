@@ -486,7 +486,8 @@ Purpose:
 
 - create Next.js app structure,
 - configure Tailwind and shadcn/ui,
-- build login/register pages,
+- load Google Identity Services library in RootLayout,
+- build login/register pages with Google One Tap / Login buttons and token verifications,
 - build auth context,
 - protect app routes.
 
@@ -501,6 +502,7 @@ Purpose:
 
 - build upload component,
 - show document list,
+- implement auto-polling for documents with `PROCESSING` status,
 - show processing/ready/failed status,
 - delete documents.
 
@@ -518,6 +520,7 @@ Purpose:
 - loading and error states,
 - empty states,
 - accessibility pass.
+
 
 ## Milestones
 

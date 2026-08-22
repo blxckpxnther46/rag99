@@ -21,6 +21,12 @@ export async function api<T>(path: string, init: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("rag99_token");
+        window.location.href = "/login";
+      }
+    }
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error ?? "Request failed");
   }

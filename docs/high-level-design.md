@@ -152,7 +152,7 @@ Example: sending a chat message.
 ## Authentication Flow
 
 ```text
-Register
+Register (Email/Password)
   -> validate name, email, password
   -> check duplicate email
   -> bcrypt hash password
@@ -160,11 +160,20 @@ Register
   -> sign JWT
   -> return token + user
 
-Login
+Login (Email/Password)
   -> validate email, password
   -> find user by email
   -> compare password with bcrypt
   -> sign JWT
+  -> return token + user
+
+Google Sign-In (OAuth 2.0)
+  -> user signs in via Google popup on frontend
+  -> Google returns credential (ID token JWT)
+  -> frontend sends POST /api/auth/google { credential }
+  -> backend validates ID token with Google API
+  -> backend finds or creates User (with random password hash)
+  -> sign rag99 JWT
   -> return token + user
 
 Protected API
@@ -174,25 +183,28 @@ Protected API
   -> continue or return 401
 ```
 
-JWT is chosen because Version 1 needs simple stateless authentication. Server-side sessions are also valid, but they require session storage and more moving pieces. OAuth is useful later, but unnecessary for a college demo where email/password auth demonstrates the required security fundamentals more clearly.
+JWT is chosen because Version 1 needs simple stateless authentication. Server-side sessions are also valid, but they require session storage and more moving pieces. Google OAuth is added alongside standard registration to provide a modern, passwordless authentication pathway, verified directly via Google's tokeninfo endpoint.
 
 ## File Upload Flow
 
 ```text
-User selects files
+User selects file
   -> frontend validates obvious size/type limits
   -> POST multipart/form-data to chat documents endpoint
   -> backend verifies JWT
   -> backend verifies chat ownership
   -> backend validates file type and size
-  -> upload original file to Cloudinary as a raw asset
-  -> create Document row
-  -> extract text
+  -> upload original file to Cloudinary as a raw asset (fast)
+  -> create Document database row in PROCESSING status
+  -> return Document row immediately to frontend (under 1s)
+
+Background Ingestion (Non-blocking)
+  -> extract text from buffer
   -> split text into chunks
-  -> generate embeddings
-  -> store DocumentChunk rows with vectors
-  -> mark document as ready or failed
-  -> return uploaded document metadata
+  -> generate embeddings for chunks
+  -> store DocumentChunk rows with pgvector vectors in database
+  -> mark Document as READY (or FAILED if extraction/embedding fails)
+  -> frontend automatically polls and updates status badge
 ```
 
 Supported Version 1 files:
@@ -207,7 +219,8 @@ Maximum size:
 - 10 MB per file.
 - 5-6 documents per chat.
 
-Cloudinary is selected for Version 1 because it gives rag99 a real cloud storage integration without adding a complex infrastructure stack. The backend still extracts text from the upload buffer before the request finishes, so document indexing does not depend on downloading the file back from Cloudinary.
+Cloudinary is selected for Version 1 because it gives rag99 a real cloud storage integration without adding a complex infrastructure stack. To prevent request timeouts, the text extraction, chunking, and embedding generation are offloaded to an asynchronous background worker flow in Node.js. The backend responds immediately with `PROCESSING` status, and the frontend polls for updates.
+
 
 ## AI Request Flow
 
@@ -305,16 +318,16 @@ Purpose:
 Alternatives:
 
 - Direct OpenAI API.
-- NVIDIA NIM API.
+- OpenRouter/Groq Client Pool.
 - Local LLM.
 
 Recommendation:
 
-- Use an OpenAI-compatible API abstraction.
+- Use an OpenAI-compatible API client pool abstraction.
 
 Why:
 
-- The same client shape can work with NVIDIA NIM or another compatible provider.
+- The same client shape can work with Groq, OpenRouter, or other compatible providers.
 - Local LLM setup adds hardware risk and is not needed for the viva objective.
 
 ### OpenAI-compatible Embedding API

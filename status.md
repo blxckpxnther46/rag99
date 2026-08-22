@@ -1,358 +1,98 @@
-# rag99 Handoff Status
+# rag99 Project Status & Architecture Report
 
-This file is written as a handoff for another AI/coding agent. Read this before making changes.
+This file documents the current successfully completed state, design choices, and configurations of `rag99` after deployment, debugging, and local verification.
 
-## User Goal
+---
 
-Build `rag99`, a college viva AI web app:
+## 1. Project Goal & Overview
+`rag99` is a college viva AI-powered document knowledge web application built as a clean, separated workspace:
+*   **Next.js Frontend** (under `web/` workspace)
+*   **Express.js Backend** (under `api/` workspace)
+*   **Database**: Neon PostgreSQL + Prisma + pgvector (1024-dimension embeddings)
+*   **Cloud Storage**: Cloudinary (handles uploads by file type)
+*   **AI Provider**: Multi-provider Round-Robin Client Pool (using Groq + OpenRouter)
+*   **Auth**: Local JWT + bcrypt registration and login, alongside integrated Google OAuth sign-in.
 
-- Next.js frontend in `web/`
-- Express.js backend in `api/`
-- PostgreSQL + Prisma + pgvector
-- JWT + bcrypt auth
-- Zod validation
-- Cloudinary raw file storage
-- RAG pipeline using OpenAI-compatible LLM + embedding APIs
+---
 
-The user explicitly wanted a clear `web/` + `api/` monorepo, not a confusing single-app structure.
+## 2. Current Architecture Decisions
 
-The user also explicitly said: **do not test/build right now**.
+### A. Backend Layer (Express.js)
+*   Located in `api/src/`.
+*   Thin route controllers map request validation (Zod) and pass actions to service classes.
+*   **Database pooling**: Configured with a `connect_timeout=30` parameter on the database connection string to survive Neon compute auto-suspend cold starts.
 
-## Current Repository Shape
+### B. Storage Layer (Cloudinary)
+*   **MIME-type split**:
+    *   PDF files are uploaded with `resource_type: "image"` so that Cloudinary serves them with correct `Content-Type: application/pdf` headers, allowing native browser rendering.
+    *   Text, markdown, and DOCX files are uploaded with `resource_type: "raw"`.
+*   Deletion of documents from the backend deletes the asset from Cloudinary dynamically based on file type.
 
-```txt
-rag99/
-  api/
-    prisma/
-      schema.prisma
-      migrations/000001_init/migration.sql
-    src/
-      ai/
-      db/
-      documents/
-      http/
-      middleware/
-      routes/
-      services/
-      app.ts
-      config.ts
-      schemas.ts
-      self-check.ts
-      server.ts
-    .env.example
-    package.json
-    tsconfig.json
-  web/
-    app/
-      chats/
-      login/
-      register/
-      globals.css
-      layout.tsx
-      page.tsx
-    components/ui/
-    lib/
-    .env.example
-    package.json
-    tsconfig.json
-    next.config.ts
-    tailwind.config.ts
-    postcss.config.js
-  docs/
-    product-requirements-document.md
-    high-level-design.md
-    low-level-design.md
-    frontend-architecture-development-plan.md
-    backend-architecture-development-plan.md
-    ai-architecture-development-plan.md
-  README.md
-  package.json
-  .gitignore
-  status.md
+### C. AI & Embedding Layer (Groq & OpenRouter client pool)
+*   **Rotated Completion Pool**: Rotates chat completion generation across your configured API keys (1x Groq key + 4x OpenRouter keys) with automatic failover (if one fails, it tries the next).
+*   **Rotated Embedding Pool**: Rotates embedding generation across your 4 OpenRouter keys using OpenAI's `text-embedding-3-small` model with `dimensions: 1024` to match the PostgreSQL schema.
+*   **State Persistence**: The rotation indices are persisted to local files (`api/src/ai/.pool-index` and `api/src/ai/.embed-index`) so they survive application restarts, picking up at the last used key + 1.
+
+### D. RAG Pipeline Configuration
+*   **Chunk size**: 2000 characters.
+*   **Chunk overlap**: 200 characters.
+*   **Top-k retrieval**: Retrieves the top-4 most relevant context chunks.
+*   **Dialogue context**: Limits history payload to the last 4 chat messages.
+*   **Temperature**: Low (`0.2`) to reduce hallucinations.
+*   **Hybrid RAG + Chatbot Fallback**: Blends document RAG retrieval with fallback general AI knowledge, citation-verified only for direct evidence matches.
+*   **Strict Response Modes**: Supports "Explain" (structured breakdowns) and "Concise" (hard-capped to maximum of 3 sentences via prompt overrides to resist injection overrides).
+
+---
+
+## 3. Environment Variables
+
+### Backend (`api/.env`)
+```env
+DATABASE_URL="postgresql://neondb_owner:...@ep-...c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&connect_timeout=30"
+JWT_SECRET="replace-with-a-long-random-secret"
+
+# Default Model Configs (Zod required fields)
+AI_BASE_URL="https://openrouter.ai/api/v1"
+AI_API_KEY="sk-or-v1-..."  # Your primary OpenRouter key
+AI_CHAT_MODEL="meta-llama/llama-3.3-70b-instruct"
+AI_EMBEDDING_MODEL="openai/text-embedding-3-small"
+EMBEDDING_DIMENSION="1024"
+
+# Cloudinary Credentials
+CLOUDINARY_CLOUD_NAME="..."
+CLOUDINARY_API_KEY="..."
+CLOUDINARY_API_SECRET="..."
+
+# Key Rotation Pool
+GROQ_API_KEY="gsk_..."
+OPENROUTER_API_KEY="sk-or-v1-..."
+OPENROUTER_API_KEY1="sk-or-v1-..."
+OPENROUTER_API_KEY2="sk-or-v1-..."
+OPENROUTER_API_KEY3="sk-or-v1-..."
 ```
 
-There is no intended local `uploads/` storage anymore. Cloudinary is the Version 1 storage provider.
-
-## Important Architecture Decisions
-
-### Backend
-
-Use Express.js in `api/`.
-
-Reason:
-
-- clearer backend ownership for viva
-- easy REST/middleware/status-code explanation
-- avoids mixing API files into Next.js frontend folders
-
-### Frontend
-
-Use Next.js in `web/`.
-
-Reason:
-
-- simple routing
-- React + TypeScript
-- easy deployment to Vercel later
-
-### Storage
-
-Use Cloudinary raw uploads.
-
-Reason:
-
-- gives the project a real cloud integration
-- improves viva scoring
-- avoids local/serverless file durability problems
-
-Current storage behavior:
-
-- uploaded file buffer is sent to Cloudinary as `resource_type: "raw"`
-- Cloudinary public ID shape:
-
-```txt
-rag99/<userId>/<chatId>/<generated-id>-<safe-original-name>
-```
-
-- PostgreSQL `Document.storedName` stores Cloudinary `public_id`
-- PostgreSQL `Document.filePath` stores Cloudinary `secure_url`
-- text extraction uses the uploaded memory buffer directly, not a local file path
-- document delete destroys the Cloudinary raw asset using `storedName`
-
-### Database
-
-Use PostgreSQL + Prisma + pgvector.
-
-Tables:
-
-- `User`
-- `Chat`
-- `Message`
-- `Document`
-- `DocumentChunk`
-
-Prisma uses camelCase column names. Important: raw SQL must use quoted camelCase names, e.g. `"documentId"`, `"chatId"`, `"chunkIndex"`.
-
-## Code Implemented
-
-### API Implemented
-
-Backend files exist under `api/src/`.
-
-Implemented:
-
-- Express app setup
-- CORS
-- JSON parsing
-- rate limiting
-- global error handler
-- auth middleware
-- register/login routes
-- chat routes
-- document routes
-- message/RAG route
-- Zod body validation
-- Zod route param validation
-- Prisma client
-- Cloudinary storage service
-- text extraction for PDF/DOCX/TXT/MD
-- chunking
-- embedding call
-- pgvector retrieval
-- prompt builder
-- structured JSON answer parsing
-
-Important API endpoints:
-
-```txt
-POST   /api/auth/register
-POST   /api/auth/login
-GET    /api/chats
-POST   /api/chats
-GET    /api/chats/:chatId
-PATCH  /api/chats/:chatId
-DELETE /api/chats/:chatId
-GET    /api/chats/:chatId/messages
-POST   /api/chats/:chatId/messages
-GET    /api/documents/chats/:chatId/documents
-POST   /api/documents/chats/:chatId/documents
-DELETE /api/documents/:documentId
-```
-
-### Frontend Implemented
-
-Frontend files exist under `web/`.
-
-Implemented:
-
-- login page
-- register page
-- chat list page
-- chat detail page
-- simple UI components
-- API client
-- token storage in `localStorage`
-- create chat
-- upload document
-- delete document
-- send prompt
-- markdown rendering
-- loading/error states
-
-Missing frontend polish:
-
-- rename chat UI
-- delete chat UI
-- citation display below assistant messages
-- better document empty state
-- better unsupported file type message
-
-## Environment Variables
-
-`api/.env.example` currently expects:
-
-```txt
-DATABASE_URL=
-JWT_SECRET=
-AI_BASE_URL=
-AI_API_KEY=
-AI_CHAT_MODEL=
-AI_EMBEDDING_MODEL=
-EMBEDDING_DIMENSION=1536
-MAX_UPLOAD_MB=10
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
-PORT=4000
-CORS_ORIGIN=http://localhost:3000
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=60
-```
-
-`web/.env.example` expects:
-
-```txt
-NEXT_PUBLIC_API_URL=http://localhost:4000
-```
-
-## Docs State
-
-The six docs in `docs/` exist and have been updated away from the old single Next.js API architecture.
-
-Recent doc changes:
-
-- changed backend from Next.js Route Handlers to Express.js
-- changed storage from local files to Cloudinary raw storage
-- removed old `uploads/` and `UPLOAD_DIR` references from main docs/status/README scans
-
-Known caveat:
-
-- I did not deeply re-review every sentence after the Cloudinary switch. A quick scan removed obvious stale local-storage references. Another agent should do one more documentation consistency pass before final submission.
-
-## Known Risks / Likely Fixes Needed
-
-No tests/builds were run after the Cloudinary change because user asked not to.
-
-Likely things to verify later:
-
-1. Install dependencies so `cloudinary` is present.
-2. Run TypeScript build for `api`.
-3. Run TypeScript build for `web`.
-4. Ensure Prisma client generation works with `Unsupported("vector(1536)")`.
-5. Ensure Cloudinary raw upload typings compile.
-6. Ensure `pdf-parse` import works under ESM/TypeScript.
-7. Ensure the migration column names match raw SQL.
-8. Decide whether Cloudinary raw assets need signed/private delivery for final demo. Current code stores `secure_url`; access control is app-level, not Cloudinary-level.
-
-## Commands To Run Later
-
-Do not run these until user allows testing/building.
-
-Install:
-
-```bash
-npm install
-```
-
-Create env files:
-
-```bash
-cp api/.env.example api/.env
-cp web/.env.example web/.env.local
-```
-
-Run migration:
-
-```bash
-npm run prisma:migrate --workspace api
-```
-
-Checks:
-
-```bash
-npm run self-check
-npm run build --workspace api
-npm run build --workspace web
-```
-
-Dev servers:
-
-```bash
-npm run dev:api
-npm run dev:web
-```
-
-Expected URLs:
-
-```txt
-API: http://localhost:4000
-Web: http://localhost:3000
-```
-
-## Manual Demo Flow
-
-Use this after setup:
-
-1. Register user.
-2. Login.
-3. Create chat.
-4. Upload `.pdf`, `.txt`, `.md`, or `.docx`.
-5. Confirm Cloudinary asset appears.
-6. Confirm document becomes `READY`.
-7. Ask a document-grounded question.
-8. Confirm answer is based on retrieved chunks.
-9. Delete document.
-10. Confirm DB document removed and Cloudinary asset destroyed.
-11. Create another chat and confirm documents are chat-isolated.
-
-## What To Do Next
-
-Recommended next agent order:
-
-1. Do a quick code review for Cloudinary integration.
-2. Do one final docs consistency scan for old local-storage wording.
-3. When user allows it, run `npm install`.
-4. Fix any TypeScript/build errors.
-5. Add missing UI controls if time remains:
-   - rename chat
-   - delete chat
-   - citation rendering
-6. Then run full manual demo.
-
-## Do Not Do
-
-- Do not revert to a single Next.js full-stack app.
-- Do not reintroduce local `uploads/` as the primary storage.
-- Do not add Docker, Redis, workers, queues, microservices, or Kubernetes for Version 1.
-- Do not run tests/builds unless the user allows it.
-- Do not commit real secrets.
-
-## Summary
-
-rag99 is mid-implementation but structurally coherent now:
-
-- `web/` is the Next.js frontend.
-- `api/` is the Express backend.
-- Cloudinary stores original uploaded files.
-- PostgreSQL + pgvector stores metadata, messages, chunks, and embeddings.
-- The main unfinished work is dependency installation, build fixes, final docs consistency, and end-to-end demo validation.
+---
+
+## 4. Completed Milestones & Verifications
+*   [x] JWT / Google Auth local storage session check.
+*   [x] Background text extraction & chunk parser checks.
+*   [x] Vector similarity lookup through Raw Prisma SQL (cosine operator `<=>`).
+*   [x] Automatic session redirection on 401 Unauthorized API responses.
+*   [x] All backend/frontend TypeScript files compile cleanly.
+*   [x] API self-check suite (`npm run self-check`) passes successfully.
+
+---
+
+## 5. UI/UX Redesign (Gemini-Inspired AI Workspace)
+*   **Conversational Canvas First**: Completely replaced the old gray dashboard card view. The chat is now a spacious, full-screen conversational canvas centered around an off-black background (`bg-[#131314]`).
+*   **Full-Height Left Sidebar**: Built a quiet, dark left sidebar (`bg-[#1e1f20]`) with:
+    *   Subtle R9/rag99 branding at the top.
+    *   Rounded "New chat" button and integrated text-search filters.
+    *   Hover-triggered contextual actions (rename and delete) to preserve clean negative space.
+    *   Bottom user profile details, settings feedback, and sign-out triggers.
+*   **Conversational Bubbles & Plain Assistant Text**:
+    *   User messages render as dark rounded bubbles (`bg-[#28282a]`) on the right.
+    *   Assistant responses render as plain conversational text on the left, fully supporting markdown syntax.
+    *   Subtle icon action row (Copy text, Upvote, Downvote) added below each assistant response.
+*   **Integrated Document Panel (Notebook Overlay)**: Moved document management to a clean overlay modal accessible via the header's active document count. Users can upload new PDF, TXT, MD, or DOCX documents or delete existing ones in this context cleanly.
+*   **Centered Floating Composer**: Input text area is a centered floating pill (650px–750px wide) at the bottom, equipped with an attachment trigger, auto-resizing text-area, and send icon.
