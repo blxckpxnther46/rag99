@@ -65,12 +65,23 @@ export async function ask(userId: string, chatId: string, content: string, mode:
 
   const result = parseAnswer(completionText);
 
+  const citationsWithContent = result.citations.map((cit: any) => {
+    const match = matches.find(
+      (m) => m.original_name === cit.source && m.chunk_index === cit.chunk
+    );
+    return {
+      source: cit.source,
+      chunk: cit.chunk,
+      content: match ? match.content : "",
+    };
+  });
+
   return prisma.message.create({
     data: {
       chatId,
       role: "ASSISTANT",
       content: result.answer,
-      citations: result.citations,
+      citations: citationsWithContent,
     },
   });
 }

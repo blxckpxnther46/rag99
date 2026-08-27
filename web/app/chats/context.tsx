@@ -8,6 +8,8 @@ export interface ChatContextType {
   loading: boolean;
   refreshChats: () => Promise<void>;
   userName: string;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
 }
 
 export const ChatContext = createContext<ChatContextType>({
@@ -15,6 +17,8 @@ export const ChatContext = createContext<ChatContextType>({
   loading: true,
   refreshChats: async () => {},
   userName: "User",
+  isMobileMenuOpen: false,
+  setIsMobileMenuOpen: () => {},
 });
 
 export const useChatContext = () => useContext(ChatContext);

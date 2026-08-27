@@ -5,13 +5,17 @@ import { useRouter } from "next/navigation";
 import { api } from "../../lib/api";
 import { useChatContext } from "./context";
 import type { Chat, Document, Message } from "../../lib/types";
+import { LiquidGlassFilters, LiquidGlassPanel, LiquidGlassButton, LiquidGlassWrapper, LiquidGlassBadge } from "../../components/LiquidGlass";
 import { 
-  Paperclip, 
+  Plus,
   Send, 
   Sparkles, 
   BookOpen, 
   FileText, 
-  GraduationCap
+  GraduationCap,
+  Mic,
+  ChevronDown,
+  Menu
 } from "lucide-react";
 
 export default function NewChatPage() {
@@ -19,7 +23,7 @@ export default function NewChatPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  const { userName, refreshChats } = useChatContext();
+  const { userName, refreshChats, setIsMobileMenuOpen } = useChatContext();
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -40,9 +44,12 @@ export default function NewChatPage() {
 
     try {
       // 1. Create new chat first
+      const chatTitle = contentStr.trim().length > 30 
+        ? contentStr.trim().substring(0, 30) + "..." 
+        : contentStr.trim();
       const chat = await api<Chat>("/api/chats", {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ title: chatTitle }),
       });
 
       // 2. Send the message
@@ -68,9 +75,12 @@ export default function NewChatPage() {
 
     try {
       // 1. Create new chat first
+      const fileTitle = selected.name.length > 30 
+        ? selected.name.substring(0, 30) + "..." 
+        : selected.name;
       const chat = await api<Chat>("/api/chats", {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ title: `Study: ${fileTitle}` }),
       });
 
       // 2. Upload file to new chat
@@ -124,136 +134,144 @@ export default function NewChatPage() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col justify-between h-full bg-[#090A0F] relative overflow-hidden px-4 md:px-8">
-      {/* Background radial glow */}
-      <div className="absolute inset-0 bg-glow-radial pointer-events-none z-0" />
-
-      {/* HEADER */}
-      <header className="flex justify-between items-center py-4 border-b border-[#2e2f30]/10 z-10">
-        <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-[#60a5fa] animate-pulse" />
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">New Session</span>
-        </div>
-      </header>
+    <div className="flex-1 flex flex-col h-full bg-transparent relative overflow-hidden px-4 md:px-8">
+      {/* FLOATING HEADER CONTROLS */}
+      <div className="absolute top-4 left-4 right-4 z-20 pointer-events-none flex justify-between items-center">
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="pointer-events-auto md:hidden w-11 h-11 rounded-xl bg-white/[0.025] border border-white/[0.055] hover:bg-white/[0.05] active:bg-white/[0.07] text-zinc-400 hover:text-white transition-all shadow-md flex items-center justify-center shrink-0"
+          title="Open menu"
+        >
+          <Menu size={18} />
+        </button>
+      </div>
 
       {/* CONVERSATIONAL CANVAS */}
-      <div className="flex-1 flex flex-col justify-center items-center max-w-3xl w-full mx-auto space-y-8 py-10 overflow-y-auto z-10">
+      <div className="flex-1 flex flex-col justify-center items-center max-w-4xl w-full mx-auto space-y-8 py-10 overflow-y-auto z-10">
         <div className="text-center space-y-3">
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#60a5fa] via-[#a8c7fa] to-white">
-            What's next, {userName}?
+          <h1 className="text-3xl md:text-4xl font-light text-zinc-100 tracking-tight leading-normal animate-fade-in">
+            Hi, {userName}. What's on your mind?
           </h1>
-          <p className="text-sm md:text-base text-slate-400 max-w-lg mx-auto">
-            Upload document notes, textbooks, or code to start your interactive RAG study assistant.
+          <p className="text-xs text-zinc-400 max-w-md mx-auto">
+            Upload notes, textbooks, or documents to begin an interactive study session.
           </p>
         </div>
 
         {/* Suggested prompts list */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-2xl px-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 w-full max-w-2xl px-4">
           {suggestedPrompts.map((s, idx) => (
             <button
               key={idx}
               onClick={() => handleSend(s.text)}
               disabled={busy}
-              className="flex flex-col items-start text-left p-4 rounded-xl bg-[#11131A]/60 backdrop-blur-sm border border-white/5 hover:border-[#60a5fa]/30 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-blue-950/10 transition-all cursor-pointer group disabled:opacity-50"
+              className="relative flex flex-col items-start text-left p-4 rounded-xl transition-all cursor-pointer group disabled:opacity-50 overflow-hidden"
             >
-              <div className="mb-2 p-1.5 rounded-lg bg-blue-950/20 group-hover:bg-blue-950/40 transition-colors">
-                {s.icon}
+              {/* Soft glass background layer */}
+              <div 
+                className="absolute inset-0 transition-all duration-150 bg-white/[0.02] border border-white/[0.06] group-hover:bg-white/[0.04] group-hover:border-white/[0.09] group-active:bg-white/[0.06]"
+              />
+              
+              <div className="relative z-10 flex flex-col items-start w-full h-full">
+                <div className="mb-2 p-1.5 rounded-xl bg-white/[0.02] border border-white/[0.06] group-hover:bg-white/[0.05] transition-colors">
+                  {s.icon}
+                </div>
+                <span className="text-xs font-semibold text-zinc-200 block mb-0.5">{s.text}</span>
+                <span className="text-[10px] text-zinc-500">{s.desc}</span>
               </div>
-              <span className="text-xs font-semibold text-slate-200 block mb-0.5">{s.text}</span>
-              <span className="text-[10px] text-slate-500">{s.desc}</span>
             </button>
           ))}
         </div>
 
         {error && (
-          <p className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 px-3 py-2 rounded-lg">
+          <p className="text-xs text-red-400 bg-red-950/10 border border-red-900/20 px-3.5 py-2 rounded-full">
             {error}
           </p>
         )}
       </div>
 
       {/* COMPOSER / INPUT SECTION */}
-      <div className="pb-6 w-full max-w-3xl mx-auto space-y-4 z-10">
-        {/* Response Mode Selector */}
-        <div className="flex justify-center">
-          <div className="flex bg-[#11131A] rounded-full p-0.5 border border-white/5">
-            <button
-              type="button"
-              onClick={() => setResponseMode("concise")}
-              disabled={busy}
-              className={`px-4 py-1 rounded-full text-xs font-semibold transition-all ${
-                responseMode === "concise"
-                  ? "bg-[#090A0F] text-[#60a5fa] shadow-sm font-bold"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              Concise
-            </button>
-            <button
-              type="button"
-              onClick={() => setResponseMode("explain")}
-              disabled={busy}
-              className={`px-4 py-1 rounded-full text-xs font-semibold transition-all ${
-                responseMode === "explain"
-                  ? "bg-[#090A0F] text-[#60a5fa] shadow-sm font-bold"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              Explain
-            </button>
-          </div>
-        </div>
-
-        {/* Composer box */}
-        <div className="relative bg-[#11131A]/80 backdrop-blur-md border border-white/5 focus-within:border-[#60a5fa]/20 focus-within:shadow-[0_0_35px_rgba(35,75,170,0.12)] rounded-[28px] px-4 py-2 flex flex-col gap-2 transition-all">
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={busy}
-            placeholder="Ask rag99 or attach a document..."
-            className="w-full bg-transparent outline-none resize-none text-sm text-[#e3e3e3] placeholder-slate-500 py-2.5 max-h-[200px] overflow-y-auto"
+      <div className="pb-6 w-full max-w-4xl mx-auto z-10 shrink-0 md:-translate-x-[8px]">
+        {/* Composer box (glowing glassy capsule pill bar) */}
+        <div className="relative w-full shadow-2xl transition-all" style={{ isolation: "isolate" }}>
+          {/* Liquid glass refractive background (distorts the blue root gradients behind it, NO border to prevent melting) */}
+          <div 
+            className="absolute inset-0 pointer-events-none rounded-2xl"
+            style={{
+              backgroundColor: "rgba(10, 12, 18, 0.22)",
+              backdropFilter: "blur(40px) saturate(140%)",
+              WebkitBackdropFilter: "blur(40px) saturate(140%)",
+              zIndex: -2
+            }}
           />
-
-          <div className="flex items-center justify-between border-t border-[#2e2f30]/20 pt-2 pb-1">
-            <div className="flex items-center gap-1">
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".pdf,.txt,.md,.docx"
-                onChange={handleUpload}
-                disabled={busy}
-                className="hidden"
-              />
+          {/* Stable glass rim and highlights (UNFILTERED to keep geometry perfectly stable) */}
+          <div 
+            className="absolute inset-0 pointer-events-none rounded-2xl border border-white/[0.045]"
+            style={{
+              boxShadow: "inset 1px 1px 0 rgba(255,255,255,0.06), inset -1px 0 0 rgba(255,255,255,0.02)",
+              zIndex: -1
+            }}
+          />
+          {/* Content container (unfiltered to keep content sharp) */}
+          <div className="relative z-10 w-full flex items-center gap-2 md:gap-3 px-3 md:px-5 py-2 md:py-2.5">
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".pdf,.txt,.md,.docx"
+              onChange={handleUpload}
+              disabled={busy}
+              className="hidden"
+            />
+            
+            {/* Left panel: attach plus icon only */}
+            <div className="flex items-center shrink-0">
               <button
                 type="button"
                 onClick={triggerFileSelect}
                 disabled={busy}
                 title="Attach document (.pdf, .txt, .md, .docx)"
-                className="p-2 hover:bg-white/5 text-slate-400 hover:text-slate-200 rounded-full transition-colors disabled:opacity-50"
+                className="p-2 hover:bg-white/[0.05] text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center shrink-0 disabled:opacity-50"
               >
-                <Paperclip size={18} />
+                <Plus size={18} />
               </button>
-              <span className="text-[10px] text-slate-500">Supports PDF/TXT/MD/DOCX</span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleSend(prompt)}
-              disabled={busy || !prompt.trim()}
-              className="p-2 bg-[#60a5fa]/10 hover:bg-[#60a5fa] text-[#60a5fa] hover:text-[#090A0F] rounded-full transition-all disabled:opacity-30 disabled:hover:bg-[#60a5fa]/10 disabled:hover:text-[#60a5fa]"
-            >
-              <Send size={16} />
-            </button>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={busy}
+              placeholder="Ask rag99..."
+              className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-[#e3e3e3] placeholder-zinc-500 py-2 max-h-[160px] overflow-y-auto leading-relaxed"
+            />
+
+            {/* Right panel: model selector, mic icon and send button */}
+            <div className="flex items-center gap-2 shrink-0">
+               <button 
+                 type="button"
+                 disabled
+                 className="hidden min-[450px]:flex items-center gap-1 text-[10px] font-bold text-zinc-500 px-2.5 py-1 rounded-full bg-white/[0.02] border border-white/[0.04] transition-colors shrink-0 cursor-default"
+               >
+                 <span>rag99</span>
+               </button>
+              
+              <button
+                type="button"
+                onClick={() => handleSend(prompt)}
+                disabled={busy || !prompt.trim()}
+                className="p-2 bg-gradient-to-r from-blue-500 to-indigo-650 hover:from-blue-600 hover:to-indigo-750 disabled:from-zinc-800/50 disabled:to-zinc-850/50 disabled:opacity-30 text-white rounded-full transition-all flex items-center justify-center shrink-0 shadow-md"
+              >
+                <Send size={13} />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="text-[10px] text-center text-slate-500">
-          rag99 generates responses grounded in your uploaded documents. Verify key citations.
+        <div className="text-[10px] text-center text-[#757775] mt-2">
+          rag99 is AI and can make mistakes.
         </div>
       </div>
     </div>
   );
-}
+ }

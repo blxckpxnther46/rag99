@@ -14,6 +14,7 @@ export type Document = {
 export type CitationType = {
   source: string;
   chunk: number;
+  content?: string;
 };
 
 export type Message = {

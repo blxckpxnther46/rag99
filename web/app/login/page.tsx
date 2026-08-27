@@ -82,17 +82,20 @@ export default function Login() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6 bg-[#090A0F] text-[#e3e3e3] font-sans relative overflow-hidden">
-      {/* Subtle background glow */}
-      <div className="absolute inset-0 bg-glow-radial pointer-events-none z-0" />
+    <main className="flex min-h-screen items-center justify-center p-6 bg-[#000000] text-[#e3e3e3] font-sans relative overflow-hidden">
+      {/* Centered glowing radial ambient gradient */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-0" 
+        style={{ background: "radial-gradient(circle at center, rgba(66, 133, 244, 0.08) 0%, transparent 70%)" }} 
+      />
 
-      <div className="w-full max-w-md bg-[#11131A] border border-white/5 rounded-2xl p-8 space-y-6 shadow-xl relative z-10">
+      <div className="w-full max-w-md bg-[#131314]/80 backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-8 space-y-6 shadow-2xl relative z-10">
         
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center space-y-2">
           <Logo size={36} />
           <h1 className="text-2xl font-bold tracking-tight text-white mt-2">Sign in to rag99</h1>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-zinc-400">
             Access your private AI knowledge workspace
           </p>
         </div>
@@ -105,7 +108,7 @@ export default function Login() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
-              className="w-full bg-[#090A0F] border border-white/5 hover:border-slate-800 focus:border-[#2e2f30] rounded-xl px-4 py-3 text-sm text-white outline-none transition-all placeholder-slate-650"
+              className="w-full bg-[#000000]/60 border border-white/[0.08] hover:border-white/[0.15] focus:border-white/[0.2] rounded-xl px-4 py-3 text-sm text-white outline-none transition-all placeholder-zinc-500"
             />
           </div>
 
@@ -116,12 +119,12 @@ export default function Login() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
-              className="w-full bg-[#090A0F] border border-white/5 hover:border-slate-800 focus:border-[#2e2f30] rounded-xl px-4 py-3 text-sm text-white outline-none transition-all placeholder-slate-650"
+              className="w-full bg-[#000000]/60 border border-white/[0.08] hover:border-white/[0.15] focus:border-white/[0.2] rounded-xl px-4 py-3 text-sm text-white outline-none transition-all placeholder-zinc-500"
             />
           </div>
 
           {error && (
-            <p className="text-xs text-red-400 bg-red-950/20 border border-red-900/30 px-3 py-2 rounded-lg">
+            <p className="text-xs text-red-400 bg-red-955/10 border border-red-900/20 px-3 py-2 rounded-lg">
               {error}
             </p>
           )}
@@ -129,7 +132,7 @@ export default function Login() {
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full py-3 bg-[#2563eb] hover:bg-[#3b82f6] text-white font-semibold rounded-full text-sm transition-all disabled:opacity-50"
+            className="w-full py-3 bg-[#ffffff] hover:bg-zinc-200 text-[#000000] font-semibold rounded-full text-sm transition-all disabled:opacity-50 shadow-md"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
