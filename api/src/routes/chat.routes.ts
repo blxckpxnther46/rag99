@@ -5,7 +5,8 @@ import { chatParamsSchema, messageSchema, titleSchema } from "../schemas.js";
 import * as chats from "../services/chat.service.js";
 import * as messages from "../services/message.service.js";
 import * as documents from "../services/document.service.js";
-import { MongoChatMessage } from "../db/mongo.js";
+import { MongoChatMessage, getChatAnalyticsPipeline } from "../db/mongo.js";
+import { sanitizePrompt } from "../middleware/sanitization.js";
 import multer from "multer";
 import env from "../config.js";
 import { AppError } from "../http/errors.js";
@@ -45,6 +46,13 @@ router.delete("/:chatId", asyncHandler(async (req, res) => {
   res.status(204).send();
 }));
 
+router.get("/:chatId/analytics", asyncHandler(async (req, res) => {
+  const { chatId } = chatParamsSchema.parse(req.params);
+  await chats.ownedChat(req.user!.id, chatId);
+  const stats = await getChatAnalyticsPipeline(chatId);
+  res.json(stats);
+}));
+
 router.get("/:chatId/messages", asyncHandler(async (req, res) => {
   const { chatId } = chatParamsSchema.parse(req.params);
   const result = await messages.listMessages(req.user!.id, chatId);
@@ -54,7 +62,10 @@ router.get("/:chatId/messages", asyncHandler(async (req, res) => {
 router.post("/:chatId/messages", asyncHandler(async (req, res) => {
   const { chatId } = chatParamsSchema.parse(req.params);
   const { content, mode } = messageSchema.parse(req.body);
-  const result = await messages.ask(req.user!.id, chatId, content, mode);
+  // Input sanitization & injection awareness defenses
+  const { sanitized, hasInjectionRisk } = sanitizePrompt(content);
+  if (hasInjectionRisk) { console.warn("[Security] Potential prompt injection detected:", chatId); }
+  const result = await messages.ask(req.user!.id, chatId, sanitized, mode);
   res.status(201).json(result);
 }));
 

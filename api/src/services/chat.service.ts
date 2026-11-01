@@ -50,7 +50,20 @@ export async function renameChat(userId: string, id: string, title: string) {
   });
 }
 
+/**
+ * ACID Transaction demonstration in PostgreSQL via Prisma:
+ * Guarantees all-or-nothing atomicity across DocumentChunks, Documents, Messages, and Chat.
+ */
 export async function deleteChat(userId: string, id: string) {
   await ownedChat(userId, id);
-  return prisma.chat.delete({ where: { id } });
+  return prisma.$transaction(async (tx) => {
+    // 1. Delete all document chunks in this chat
+    await tx.documentChunk.deleteMany({ where: { chatId: id } });
+    // 2. Delete all documents in this chat
+    await tx.document.deleteMany({ where: { chatId: id } });
+    // 3. Delete all messages in this chat
+    await tx.message.deleteMany({ where: { chatId: id } });
+    // 4. Finally delete the chat itself
+    return tx.chat.delete({ where: { id } });
+  });
 }
