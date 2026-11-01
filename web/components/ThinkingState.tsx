@@ -9,10 +9,20 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const STAGES = [800, 800, 1500, 1000, 1000];
 
+/**
+ * JavaScript — Hoisting:
+ * Function declaration `useSequence` is hoisted to the top of its lexical scope during compilation phase.
+ *
+ * JavaScript — Event loop:
+ * Leverages the JavaScript Event Loop macrotask queue via `setTimeout`.
+ * The timer callback runs asynchronously after the call stack and microtask queue clear,
+ * maintaining a closure over the latest `stage` state variable across render cycles.
+ */
 function useSequence(steps: number[]) {
   const [stage, setStage] = useState(0);
   useEffect(() => {
     if (stage >= steps.length - 1) return;
+    // JavaScript — Event loop: Defer execution to the macrotask queue
     const t = setTimeout(() => setStage((s) => s + 1), steps[stage]);
     return () => clearTimeout(t);
   }, [stage, steps]);
@@ -98,95 +108,59 @@ export default function ThinkingState({ onSettled }: { onSettled?: () => void })
               className="bg-clip-text text-[13px] font-semibold whitespace-nowrap text-transparent"
               style={{
                 backgroundImage:
-                  "linear-gradient(90deg, #80868b 35%, #e3e3e3 50%, #80868b 65%)",
-                backgroundSize: "200% 100%",
-                animation: "shimmer-text 1.4s linear infinite",
+                  "radial-gradient(circle 60px at 0% 0%, #60a5fa, #80868b)",
               }}
             >
               {v.active}
             </span>
           ) : (
-            <span
-              className="text-[13px] font-semibold whitespace-nowrap text-[#60a5fa]"
-              style={{ animation: "fade-in 350ms ease-out both" }}
-            >
+            <span className="text-[13px] font-semibold whitespace-nowrap text-white/50">
               {v.done}
             </span>
           )}
         </span>
         <svg
-          width="12" 
-          height="12" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="#80868b" 
-          strokeWidth="2.2" 
-          strokeLinecap="round" 
-          strokeLinejoin="round"
-          className="transition-transform duration-300 ml-1"
-          style={{ transform: expanded ? "rotate(180deg)" : "rotate(0)" }}
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className={`text-slate-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
         >
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
 
-      {/* expandable trace */}
-      <div
-        className="grid transition-[grid-template-rows,opacity] duration-400"
-        style={{
-          gridTemplateRows: expanded ? "1fr" : "0fr",
-          opacity: expanded ? 1 : 0,
-          transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)",
-        }}
-      >
-        <div className="overflow-hidden">
-          <div className="relative mt-1 ml-[5px] pl-4">
-            <span
-              aria-hidden
-              className="absolute left-[3px] w-px bg-white/5"
-              style={{ 
-                top: -8, 
-                height: lineHeight ? lineHeight - 2 : 0, 
-                transition: "height 500ms cubic-bezier(0.23,1,0.32,1)" 
-              }}
-            />
-            <div ref={traceRef} className="flex flex-col gap-1 py-1">
-              {v.rows.slice(0, visible).map((row, i) => {
-                const isLastAndWorking = i === visible - 1 && working;
-                const content = (
-                  <>
-                    {i < visible - 1 || !working ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                    ) : (
-                      <span className="size-3 shrink-0 rounded-full border-[1.5px] border-white/10 border-t-[#60a5fa]" style={{ animation: "spin 700ms linear infinite" }} />
-                    )}
-                    <span className={`min-w-0 truncate text-[12px] ${isLastAndWorking ? "font-semibold text-white" : "text-slate-400"}`}>
+      {/* rows */}
+      {expanded && (
+        <div className="relative mt-2 pl-4">
+          <div
+            className="absolute left-1.5 top-2 w-[1px] bg-slate-800 transition-all duration-300"
+            style={{ height: lineHeight ? `${lineHeight - 16}px` : "0px" }}
+          />
+          <div ref={traceRef} className="space-y-3">
+            {v.rows.slice(0, visible).map((row, idx) => {
+              const isCurrent = idx === visible - 1 && working;
+              return (
+                <div key={idx} className="flex items-start gap-2 text-xs">
+                  <div className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500/80" />
+                  <div className="flex flex-col">
+                    <span className={isCurrent ? "text-blue-300 font-medium" : "text-slate-400"}>
                       {row.primary}
                     </span>
                     {row.secondary && (
-                      <span className="shrink-0 text-[11px] text-slate-500 font-mono">
+                      <span className="text-[10px] text-slate-500 font-mono mt-0.5">
                         {row.secondary}
                       </span>
                     )}
-                  </>
-                );
-                
-                return (
-                  <div 
-                    key={row.primary} 
-                    className="flex min-h-7 w-full items-center gap-2.5 rounded-lg px-2 py-0.5 text-left"
-                    style={{ animation: `fade-up 320ms cubic-bezier(0.23,1,0.32,1) ${i * 120}ms both` }}
-                  >
-                    {content}
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

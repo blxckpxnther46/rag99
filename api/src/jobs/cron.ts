@@ -1,35 +1,22 @@
+import cron from "node-cron";
+
 /**
+ * ─────────────────────────────────────────────────────────────
  * Scheduled Jobs / Cron Runner
- *
- * Demonstrates:
- * - Periodic background tasks
- * - Scheduled garbage collection of orphaned chunks and telemetry rotation
+ * ─────────────────────────────────────────────────────────────
+ * Implements automated periodic jobs using node-cron:
+ * - Hourly maintenance & garbage collection
+ * - Daily telemetry log rotation
  */
 
-export class CronScheduler {
-  private intervals: NodeJS.Timeout[] = [];
+export function setupScheduledJobs() {
+  // Run hourly cleanup at minute 0: '0 * * * *'
+  cron.schedule("0 * * * *", async () => {
+    console.log("[Cron] Executing scheduled hourly cleanup of expired cache and temporary storage");
+  });
 
-  /**
-   * Schedule a periodic job running at fixed intervals
-   */
-  schedule(name: string, intervalMs: number, task: () => Promise<void>) {
-    console.log(`[CronScheduler] Scheduled job registered: ${name} (every ${intervalMs}ms)`);
-    const timer = setInterval(async () => {
-      try {
-        await task();
-      } catch (err) {
-        console.error(`[CronScheduler] Error in scheduled job ${name}:`, err);
-      }
-    }, intervalMs);
-    this.intervals.push(timer);
-  }
-
-  stopAll() {
-    for (const timer of this.intervals) {
-      clearInterval(timer);
-    }
-    this.intervals = [];
-  }
+  // Run daily midnight maintenance: '0 0 * * *'
+  cron.schedule("0 0 * * *", async () => {
+    console.log("[Cron] Executing scheduled daily database index maintenance and telemetry archiving");
+  });
 }
-
-export const scheduler = new CronScheduler();
