@@ -35,7 +35,8 @@ import {
 } from "lucide-react";
 
 export default function ChatPage() {
-  const { chatId } = useParams<{ chatId: string }>(); 
+  const params = useParams();
+  const chatId = typeof params?.chatId === "string" ? params.chatId : Array.isArray(params?.chatId) ? params.chatId[0] : ""; 
   const router = useRouter();
   
   const fileInput = useRef<HTMLInputElement>(null);
@@ -122,6 +123,7 @@ export default function ChatPage() {
 
   // Initial load
   useEffect(() => {
+    if (!chatId) return;
     Promise.all([
       api<Chat & { messages: Message[] }>(`/api/chats/${chatId}`),
       api<Document[]>(`/api/chats/${chatId}/documents`),

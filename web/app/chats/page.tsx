@@ -86,7 +86,7 @@ export default function NewChatPage() {
       // 2. Upload file to new chat
       const formData = new FormData();
       formData.append("file", selected);
-      await api<Document>(`/api/documents/chats/${chat.id}/documents`, {
+      await api<Document>(`/api/chats/${chat.id}/documents`, {
         method: "POST",
         body: formData,
       });
