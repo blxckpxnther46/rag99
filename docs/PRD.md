@@ -69,6 +69,46 @@ Users frequently have large, complex documents but struggle to extract specific 
 - **Implementation Evidence:** `api/src/db/mongo.ts`, `api/src/services/message.service.ts` (`logMongoMessage`), `PATCH /api/chats/:chatId/messages/:messageId/rating`.
 - **Acceptance Behavior:** Each assistant turn logs embedding latency, retrieval latency, LLM generation time, and provider used into MongoDB. Thumbs-up/down ratings update MongoDB documents in place. Operates with a fail-safe bypass if MongoDB is unreachable.
 
+### FR-06: NoSQL Relationships (Embedding vs Referencing)
+- **Requirement:** Demonstrate both Embedding and Referencing relationships in NoSQL document database.
+- **Implementation Evidence:** `api/src/db/mongo.ts`.
+- **Acceptance Behavior:** `CitationSubSchema` and `RagTelemetrySubSchema` are embedded directly inside `ChatMessageDocSchema`. `MongoChatSession` demonstrates normalized referencing via `lastMessageRef: { type: Schema.Types.ObjectId, ref: "ChatMessage" }` resolved via `.populate()`.
+
+### FR-07: NoSQL Aggregation Pipelines
+- **Requirement:** Execute multi-stage analytics aggregation pipelines.
+- **Implementation Evidence:** `api/src/db/mongo.ts` (`getChatAnalyticsPipeline`), `api/src/routes/chat.routes.ts` (`GET /api/chats/:chatId/analytics`).
+- **Acceptance Behavior:** Multi-stage pipeline (`$match` -> `$group` -> `$project` -> `$sort`) computes average latencies, response counts, and upvote/downvote metrics.
+
+### FR-08: SQL Database ACID Transactions (PostgreSQL)
+- **Requirement:** Ensure all-or-nothing transactional consistency for multi-entity operations.
+- **Implementation Evidence:** `api/src/services/chat.service.ts` (`deleteChat` using `prisma.$transaction`).
+- **Acceptance Behavior:** Atomically deletes document chunks, documents, and messages before deleting the chat; rolls back completely if any step fails.
+
+### FR-09: Input Sanitization & Prompt Injection Awareness and Defenses
+- **Requirement:** Sanitize user input against XSS and defend RAG prompts against adversarial injection.
+- **Implementation Evidence:** `api/src/middleware/sanitization.ts`, `api/src/routes/chat.routes.ts`.
+- **Acceptance Behavior:** Strips script/iframe tags, detects adversarial prompt injection patterns (`ignore previous instructions`, `system override`), and neutralizes special prompt delimiter tokens (`<|im_start|>`, `### System:`).
+
+### FR-10: Caching with Redis & In-Memory Fallback
+- **Requirement:** Key-value caching layer with TTL expiration for repeated vector embeddings and queries.
+- **Implementation Evidence:** `api/src/db/cache.ts` (using `ioredis`).
+- **Acceptance Behavior:** Provides `get`, `set` with TTL, and `del` with automatic fallback to in-memory store if Redis is unavailable.
+
+### FR-11: Scheduled Jobs & Cron Runner
+- **Requirement:** Recurring background tasks for system maintenance and telemetry log management.
+- **Implementation Evidence:** `api/src/jobs/cron.ts` (using `node-cron`).
+- **Acceptance Behavior:** Runs hourly cleanup of expired cache and daily database index maintenance at midnight.
+
+### FR-12: WebSocket / Real-Time Communication
+- **Requirement:** Bidirectional WebSocket communication for real-time status events.
+- **Implementation Evidence:** `api/src/server.ts` (using `ws` on path `/ws`).
+- **Acceptance Behavior:** Upgrades HTTP server to support WebSocket connections and bidirectional ping/pong and event broadcasts.
+
+### FR-13: Function Calling / Tool Use
+- **Requirement:** Structured function calling schema declarations compatible with AI agent standards.
+- **Implementation Evidence:** `api/src/ai/tools.ts`.
+- **Acceptance Behavior:** Declares JSON parameter schemas for `query_document_chunks` and `calculate_reading_time` with dynamic execution dispatch.
+
 ## 9. Non-Functional Requirements
 - **Performance:** Asynchronous document ingestion prevents blocking the main thread; average RAG response latency under 6 seconds.
 - **High Availability & Fault Tolerance:** Multi-provider AI pool automatically falls back to secondary keys/providers on 429/502 errors. Fail-safe bypass on MongoDB prevents analytics logging issues from degrading user-facing chat.

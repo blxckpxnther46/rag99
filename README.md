@@ -78,6 +78,7 @@ flowchart TD
 | `GET` | `/api/chats/:chatId/messages`| List messages | Yes |
 | `POST` | `/api/chats/:chatId/messages`| Send RAG query | Yes |
 | `PATCH` | `/api/chats/:chatId/messages/:messageId/rating` | Thumbs-up/down feedback | Yes |
+| `GET` | `/api/chats/:chatId/analytics` | MongoDB Aggregation Pipeline stats | Yes |
 | `GET` | `/api/chats/:chatId/documents`| List documents | Yes |
 | `POST` | `/api/chats/:chatId/documents`| Upload document | Yes |
 | `DELETE`| `/api/documents/:documentId`| Delete document | Yes |
@@ -168,3 +169,23 @@ Detailed technical specifications and design documentation can be found in the `
 - [AAD.md](./docs/AAD.md) - API & AI Architecture Document
 - [BAD.md](./docs/BAD.md) - Backend Architecture Document
 - [FAD.md](./docs/FAD.md) - Frontend Architecture Document
+
+
+## 14. Architecture & Engineering Checklist Reference
+
+| Concept | Layer | Implementation Evidence |
+|---|---|---|
+| **Embedding vs Referencing** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (`CitationSubSchema` embedded in `ChatMessageDocSchema`; `MongoChatSession` referencing via `ref: "ChatMessage"` and `.populate()`) |
+| **Aggregation Pipelines** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (`getChatAnalyticsPipeline` using `$match`, `$group`, `$project`, `$sort`), `GET /api/chats/:chatId/analytics` |
+| **ACID Transactions** | SQL (PostgreSQL) | `api/src/services/chat.service.ts` (`deleteChat` using `prisma.$transaction`) |
+| **Input Sanitization & Injection Defense** | Security & Auth | `api/src/middleware/sanitization.ts` (`sanitizeHtml`, `sanitizePrompt`), `api/src/routes/chat.routes.ts` |
+| **Caching with Redis** | System & Integration | `api/src/db/cache.ts` (`RedisCacheManager` with `ioredis` and TTL expiration) |
+| **Scheduled Jobs / Cron** | System & Integration | `api/src/jobs/cron.ts` (`setupScheduledJobs` with `node-cron`) |
+| **WebSocket Real-Time** | System & Integration | `api/src/server.ts` (`WebSocketServer` on path `/ws` via `ws`) |
+| **Containerization** | Engineering Practices | `api/Dockerfile`, `web/Dockerfile`, `docker-compose.yml` |
+| **Function Calling / Tool Use** | AI App Engineering | `api/src/ai/tools.ts` (`availableTools`, `executeTool`) |
+| **Frontend Deployment** | Frontend | `web/vercel.json` (Next.js 15 on Vercel) |
+| **Backend Deployment** | Backend | `render.yaml` (Express.js on Render) |
+| **Secrets Management** | Engineering Practices | `api/src/config.ts`, `.env.example`, `api/.env.example` |
+| **JavaScript Event Loop & Hoisting** | Frontend | `web/components/ThinkingState.tsx` (`useSequence` closure, `setTimeout` macrotasks, function hoisting) |
+| **Server-Side Rendering (SSR)** | Frontend | `web/app/layout.tsx`, `web/app/page.tsx` (React Server Components) |

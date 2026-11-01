@@ -97,3 +97,23 @@ Each question-answer cycle records an audit document in MongoDB capturing:
 - `retrievedChunkCount`: Number of document chunks supplied as context.
 - `rating`: Feedback state (`"up"`, `"down"`, or `""`).
 - **Fail-safe Design:** If MongoDB is unreachable, the system logs a bypass notice and returns the answer to the user with zero interruption.
+
+
+## 10. AI App Engineering: Function Calling & Tool Use
+
+Implemented in `api/src/ai/tools.ts`.
+- Declares structured tool specifications compatible with OpenAI/Groq function calling:
+  - `query_document_chunks`: Vector similarity lookup with `query` and `topK` arguments.
+  - `calculate_reading_time`: Text processing utility estimating reading duration.
+- Dispatches tool executions dynamically via `executeTool(name, args)`.
+
+## 11. Prompt Injection Defenses & Input Sanitization
+
+Implemented in `api/src/middleware/sanitization.ts` and `api/src/routes/chat.routes.ts`.
+- **Evasion Detection:** Checks incoming queries against jailbreak signatures (`ignore previous instructions`, `system override`, `dan mode`).
+- **Delimiter Sanitization:** Strips LLM delimiter tokens (`<|im_start|>`, `### System:`) to prevent prompt boundary escaping.
+
+## 12. Redis Caching for AI Query Optimization
+
+Implemented in `api/src/db/cache.ts`.
+- Caches generated embeddings and nearest-neighbor retrieval lookups with TTL expiration to eliminate redundant vector compute.

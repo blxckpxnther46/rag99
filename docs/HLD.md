@@ -174,3 +174,49 @@ graph LR
 | **PostgreSQL + pgvector** | Pinecone, Milvus | **PRO:** Atomic joins between chunks, documents, and chats. Zero data synchronization delays. **CON:** Requires explicit vector index tuning at huge scale. |
 | **Multi-Provider Pool** | Single OpenAI API | **PRO:** Zero downtime during provider outages or rate limits. **CON:** Minor logic overhead managing round-robin pointer. |
 | **Fail-Safe Mongo Bypass** | Hard dependency on MongoDB | **PRO:** If Atlas has DNS/network blip, core chat and RAG flow continue uninterrupted. **CON:** Telemetry is skipped during outage window. |
+
+
+## 10. Advanced Architecture Concepts Implemented
+
+### 10.1 NoSQL MongoDB: Embedding vs Referencing Relationships
+- **File:** `api/src/db/mongo.ts`
+- **Embedding:** Citations (`CitationSubSchema`) and execution latency metrics (`RagTelemetrySubSchema`) are embedded directly inside `ChatMessageDocSchema` as subdocuments for fast single-turn reads.
+- **Referencing:** `MongoChatSession` implements normalized document referencing with `lastMessageRef: { type: Schema.Types.ObjectId, ref: "ChatMessage" }` and `pinnedMessages`, dynamically populated with Mongoose `.populate()`.
+
+### 10.2 NoSQL MongoDB: Aggregation Pipelines
+- **File:** `api/src/db/mongo.ts`, `api/src/routes/chat.routes.ts`
+- **Implementation:** `getChatAnalyticsPipeline(chatId)` runs a 4-stage aggregation pipeline:
+  1. `$match`: Filters records by `chatId` and `ASSISTANT` role.
+  2. `$group`: Aggregates latency statistics (`avgEmbedDurationMs`, `avgRetrievalDurationMs`, `avgLlmDurationMs`, `avgTotalLatencyMs`) and sums user ratings (upvotes/downvotes).
+  3. `$project`: Reshapes document metrics and rounds numerical averages via `$round`.
+  4. `$sort`: Orders results by response count.
+- **Route:** Exposed via `GET /api/chats/:chatId/analytics`.
+
+### 10.3 SQL PostgreSQL: ACID Transactions
+- **File:** `api/src/services/chat.service.ts`
+- **Implementation:** `deleteChat(userId, id)` wraps cascading deletions across `DocumentChunk`, `Document`, and `Message` inside `prisma.$transaction(async (tx) => { ... })` to guarantee atomicity and rollback safety.
+
+### 10.4 Input Sanitization & Prompt Injection Awareness and Defenses
+- **Files:** `api/src/middleware/sanitization.ts`, `api/src/routes/chat.routes.ts`
+- **XSS Sanitization:** `sanitizeHtml()` neutralizes script and iframe injection payloads.
+- **Prompt Injection Filter:** `sanitizePrompt()` detects adversarial jailbreak patterns (`ignore previous instructions`, `system override`, `dan mode`) and strips special delimiter tokens (`<|im_start|>`, `### System:`) before the query enters the RAG pipeline.
+
+### 10.5 Caching with Redis & In-Memory Store
+- **File:** `api/src/db/cache.ts`
+- **Implementation:** `RedisCacheManager` uses `ioredis` with TTL expiration and an automatic in-memory fallback store to cache query embeddings and frequent chunk queries.
+
+### 10.6 Scheduled Jobs & Cron Runner
+- **File:** `api/src/jobs/cron.ts`
+- **Implementation:** `setupScheduledJobs()` uses `node-cron` to run recurring background tasks: hourly cache and temporary storage pruning, and daily midnight telemetry archiving.
+
+### 10.7 WebSocket / Real-Time Communication
+- **File:** `api/src/server.ts`
+- **Implementation:** `WebSocketServer` (from `ws`) attached to the HTTP server on path `/ws` enabling bidirectional client communication for live progress events.
+
+### 10.8 Containerization with Docker
+- **Files:** `api/Dockerfile`, `web/Dockerfile`, `docker-compose.yml`
+- **Implementation:** Multi-stage Docker builds for Node.js API and Next.js frontend with unified Docker Compose orchestration.
+
+### 10.9 Function Calling / Tool Use
+- **File:** `api/src/ai/tools.ts`
+- **Implementation:** Declares structured tool schemas (`query_document_chunks`, `calculate_reading_time`) and dynamic execution dispatch for AI agent integrations.

@@ -246,6 +246,7 @@ export const ChatMessageDoc =
 | `GET` | `/api/chats/:chatId/messages` | List messages | None | `Message[]` |
 | `POST` | `/api/chats/:chatId/messages` | Execute RAG query | `{ content, mode? }` | `Message` |
 | `PATCH`| `/api/chats/:chatId/messages/:messageId/rating` | Save feedback | `{ rating: "up" \| "down" }` | `{ ok: true, rating }` |
+| `GET` | `/api/chats/:chatId/analytics` | MongoDB Aggregation stats | None | `AggregationStats[]` |
 | `GET` | `/api/chats/:chatId/documents` | List documents | None | `Document[]` |
 | `POST` | `/api/chats/:chatId/documents` | Upload file | Multipart `file` | `201 Created` |
 | `DELETE`| `/api/documents/:documentId` | Delete document | None | `204 No Content` |
@@ -280,3 +281,96 @@ export const ChatMessageDoc =
 - **Environment Variables Required:**
   - `NEXT_PUBLIC_API_URL`: Live Render backend URL (e.g., `https://rag99-api.onrender.com`)
   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`: Google OAuth Client ID
+
+
+---
+
+## 7. Implementation Details for System & Engineering Concepts
+
+### 7.1 NoSQL Relationships (Embedding vs Referencing)
+- **File:** `api/src/db/mongo.ts`
+- **Embedding:** Citations (`CitationSubSchema`) and execution telemetry (`RagTelemetrySubSchema`) are embedded directly as subdocument arrays/objects inside `ChatMessageDocSchema`.
+- **Referencing:** `MongoChatSession` schema declares references using `Schema.Types.ObjectId` pointing to `"ChatMessage"`:
+```typescript
+const ChatSessionMetaSchema = new Schema({
+  chatId: { type: String, required: true, unique: true },
+  lastMessageRef: { type: Schema.Types.ObjectId, ref: "ChatMessage" },
+  pinnedMessages: [{ type: Schema.Types.ObjectId, ref: "ChatMessage" }]
+});
+```
+- Resolved at query time via Mongoose `.populate("lastMessageRef")`.
+
+### 7.2 NoSQL Aggregation Pipelines
+- **File:** `api/src/db/mongo.ts` (`getChatAnalyticsPipeline`)
+```typescript
+export async function getChatAnalyticsPipeline(chatId: string) {
+  return MongoChatMessage.aggregate([
+    { $match: { chatId, role: "ASSISTANT" } },
+    {
+      $group: {
+        _id: "$chatId",
+        totalResponses: { $sum: 1 },
+        avgEmbedDurationMs: { $avg: "$telemetry.embedDurationMs" },
+        avgRetrievalDurationMs: { $avg: "$telemetry.retrievalDurationMs" },
+        avgLlmDurationMs: { $avg: "$telemetry.llmDurationMs" },
+        avgTotalLatencyMs: { $avg: "$telemetry.totalLatencyMs" },
+        upvotes: { $sum: { $cond: [{ $eq: ["$rating", "up"] }, 1, 0] } },
+        downvotes: { $sum: { $cond: [{ $eq: ["$rating", "down"] }, 1, 0] } }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        chatId: "$_id",
+        totalResponses: 1,
+        avgEmbedDurationMs: { $round: ["$avgEmbedDurationMs", 2] },
+        avgRetrievalDurationMs: { $round: ["$avgRetrievalDurationMs", 2] },
+        avgLlmDurationMs: { $round: ["$avgLlmDurationMs", 2] },
+        avgTotalLatencyMs: { $round: ["$avgTotalLatencyMs", 2] },
+        upvotes: 1,
+        downvotes: 1
+      }
+    },
+    { $sort: { totalResponses: -1 } }
+  ]);
+}
+```
+
+### 7.3 PostgreSQL ACID Transactions
+- **File:** `api/src/services/chat.service.ts`
+```typescript
+export async function deleteChat(userId: string, id: string) {
+  await ownedChat(userId, id);
+  return prisma.$transaction(async (tx) => {
+    await tx.documentChunk.deleteMany({ where: { chatId: id } });
+    await tx.document.deleteMany({ where: { chatId: id } });
+    await tx.message.deleteMany({ where: { chatId: id } });
+    return tx.chat.delete({ where: { id } });
+  });
+}
+```
+
+### 7.4 Input Sanitization & Prompt Injection Defenses
+- **File:** `api/src/middleware/sanitization.ts`
+- `sanitizeHtml(input: string)`: Strips `<script>`, `<iframe>`, `javascript:`, and DOM event handlers.
+- `sanitizePrompt(prompt: string)`: Matches input against prompt injection signatures (`/ignore\s+(all\s+)?previous\s+instructions/i`, `/system\s+override/i`, etc.) and strips special delimiter tokens (`<|im_start|>`, `### System:`).
+
+### 7.5 Caching with Redis & In-Memory Fallback
+- **File:** `api/src/db/cache.ts`
+- Implements `RedisCacheManager` using `ioredis` with key-value TTL support and in-memory Map fallback.
+
+### 7.6 Scheduled Jobs & Cron Runner
+- **File:** `api/src/jobs/cron.ts`
+- Implements automated periodic tasks using `node-cron` (`cron.schedule("0 * * * *", ...)`).
+
+### 7.7 WebSocket / Real-Time Communication
+- **File:** `api/src/server.ts`
+- Attaches `WebSocketServer` from `ws` to the Node HTTP server on path `/ws`.
+
+### 7.8 Function Calling / Tool Use
+- **File:** `api/src/ai/tools.ts`
+- Declares `ToolDefinition` schemas for `query_document_chunks` and `calculate_reading_time` with JSON parameter validation.
+
+### 7.9 JavaScript Event Loop, Hoisting & SSR
+- **Event Loop & Hoisting:** `web/components/ThinkingState.tsx` documents macrotask queue scheduling via `setTimeout` and compilation phase function hoisting.
+- **Server-Side Rendering:** `web/app/layout.tsx` and `web/app/page.tsx` are React Server Components executing on the server during SSR.

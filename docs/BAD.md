@@ -107,3 +107,32 @@ api/
 - **Start Command:** `node dist/server.js`
 - **Health Check Path:** `/health`
 - **Environment Variables:** `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN`, `AI_BASE_URL`, `AI_API_KEY`, `AI_CHAT_MODEL`, `AI_EMBEDDING_MODEL`, `CLOUDINARY_*`, `MONGODB_URI`, `GROQ_API_KEY`, `OPENROUTER_API_KEY*`.
+
+
+## 8. Backend & System Integration Patterns
+
+### 8.1 PostgreSQL ACID Transactions
+Implemented in `api/src/services/chat.service.ts` via `prisma.$transaction`:
+- Encapsulates multi-table operations (`DocumentChunk`, `Document`, `Message`, and `Chat`) into an atomic execution block.
+
+### 8.2 NoSQL Embedding vs Referencing & Aggregations
+Implemented in `api/src/db/mongo.ts`:
+- **Embedding:** Embedded `CitationSubSchema` and `RagTelemetrySubSchema` inside `ChatMessageDocSchema`.
+- **Referencing:** Normalized `MongoChatSession` schema linking to `ChatMessage` with `ref: "ChatMessage"` and populated via `.populate()`.
+- **Aggregation Pipeline:** Multi-stage pipeline (`$match`, `$group`, `$project`, `$sort`) exposed at `GET /api/chats/:chatId/analytics`.
+
+### 8.3 Caching with Redis & In-Memory Store
+Implemented in `api/src/db/cache.ts`:
+- `RedisCacheManager` uses `ioredis` with key-value TTL support and in-memory Map fallback.
+
+### 8.4 Scheduled Jobs & Cron Runner
+Implemented in `api/src/jobs/cron.ts`:
+- Uses `node-cron` to run automated hourly maintenance and daily telemetry archiving.
+
+### 8.5 WebSocket / Real-Time Communication
+Implemented in `api/src/server.ts`:
+- Uses `ws` to attach a `WebSocketServer` to the Express HTTP server on path `/ws`.
+
+### 8.6 Docker Containerization
+- `api/Dockerfile`: Multi-stage Alpine container build.
+- `docker-compose.yml`: Multi-service local and CI/CD orchestration.

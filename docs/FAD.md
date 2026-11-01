@@ -69,3 +69,23 @@ web/
 - **Environment Variables:**
   - `NEXT_PUBLIC_API_URL`: URL of the deployed Render backend (e.g. `https://rag99-api.onrender.com`).
   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`: Google OAuth Web Client ID.
+
+
+## 5. Core Frontend JavaScript & Rendering Concepts
+
+### 5.1 JavaScript — Event Loop & Closures
+Implemented in `web/components/ThinkingState.tsx`:
+- `useSequence` hook leverages the JavaScript event loop macrotask queue via `setTimeout`.
+- Timers execute asynchronously after the synchronous call stack and microtask queues resolve.
+- Forms closures over state variables (`stage`), referencing the latest stage progression across re-renders.
+
+### 5.2 JavaScript — Hoisting
+Implemented in `web/components/ThinkingState.tsx`:
+- Function declarations (e.g. `useSequence`) are hoisted with their definitions to the top of module scope during JavaScript compilation phase, enabling invocation throughout the component lifecycle.
+
+### 5.3 Server-Side Rendering (SSR)
+Implemented in `web/app/layout.tsx` and `web/app/page.tsx`:
+- Next.js React Server Components (RSC) execute server-side on every request to generate and stream the initial HTML shell.
+
+### 5.4 Containerization with Docker
+- `web/Dockerfile`: Multi-stage Next.js production build container.
