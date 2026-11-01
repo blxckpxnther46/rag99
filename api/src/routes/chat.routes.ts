@@ -5,6 +5,7 @@ import { chatParamsSchema, messageSchema, titleSchema } from "../schemas.js";
 import * as chats from "../services/chat.service.js";
 import * as messages from "../services/message.service.js";
 import * as documents from "../services/document.service.js";
+import { MongoChatMessage } from "../db/mongo.js";
 import multer from "multer";
 import env from "../config.js";
 import { AppError } from "../http/errors.js";
@@ -39,6 +40,8 @@ router.patch("/:chatId", asyncHandler(async (req, res) => {
 router.delete("/:chatId", asyncHandler(async (req, res) => {
   const { chatId } = chatParamsSchema.parse(req.params);
   await chats.deleteChat(req.user!.id, chatId);
+  // Polyglot persistence: clean up corresponding MongoDB chat analytics
+  MongoChatMessage.deleteMany({ chatId }).catch(() => {});
   res.status(204).send();
 }));
 
@@ -53,6 +56,35 @@ router.post("/:chatId/messages", asyncHandler(async (req, res) => {
   const { content, mode } = messageSchema.parse(req.body);
   const result = await messages.ask(req.user!.id, chatId, content, mode);
   res.status(201).json(result);
+}));
+
+router.patch("/:chatId/messages/:messageId/rating", asyncHandler(async (req, res) => {
+  const { chatId, messageId } = req.params;
+  const { rating } = req.body;
+  console.log(`[Rating Update] Received rating "${rating}" for message ${messageId} in chat ${chatId}`);
+
+  // Update user feedback rating in MongoDB by matching messageId or _id, or latest message in chat if temporary ID
+  let updateRes = await MongoChatMessage.updateOne(
+    { $or: [{ messageId }, { _id: messageId }] },
+    { $set: { rating: rating || "" } }
+  ).catch((err) => {
+    console.error("[Rating Update] MongoDB update error:", err);
+    return null;
+  });
+
+  // Fallback: If the messageId sent by the client was not yet assigned or differs, update the latest ASSISTANT message in this chat
+  if (!updateRes || updateRes.matchedCount === 0) {
+    const latestAssistant = await MongoChatMessage.findOne({ chatId, role: "ASSISTANT" }).sort({ createdAt: -1 });
+    if (latestAssistant) {
+      updateRes = await MongoChatMessage.updateOne(
+        { _id: latestAssistant._id },
+        { $set: { rating: rating || "" } }
+      );
+    }
+  }
+
+  console.log(`[Rating Update] Matched: ${updateRes?.matchedCount}, Modified: ${updateRes?.modifiedCount}`);
+  res.json({ success: true, messageId, rating, matched: updateRes?.matchedCount });
 }));
 
 const allowedMimeTypes = new Set([

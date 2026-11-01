@@ -23,6 +23,7 @@ const env = z.object({
   OPENROUTER_API_KEY1: z.string().min(1).optional(),
   OPENROUTER_API_KEY2: z.string().min(1).optional(),
   OPENROUTER_API_KEY3: z.string().min(1).optional(),
+  MONGODB_URI: z.string().min(1).optional(),
 }).parse(process.env);
 
 export default env;

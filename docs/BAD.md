@@ -1,15 +1,19 @@
 # Backend Architecture & Development (BAD)
 
-This document outlines the backend architecture of rag99, implemented with Express.js and TypeScript.
+This document outlines the backend architecture of rag99, implemented with Express.js, TypeScript, PostgreSQL (pgvector via Prisma), and MongoDB (via Mongoose).
 
 ## 1. Architecture Overview
-
-The backend is an Express.js 4 application with Node.js ES modules. It uses Prisma ORM with PostgreSQL (Neon).
+The backend is an Express.js 4 application operating in Node.js ES modules mode. It features a **Polyglot Persistence Architecture**:
+- **PostgreSQL (Neon) via Prisma ORM:** Manages relational entities (User, Chat, Message, Document, DocumentChunk) and performs raw vector similarity queries via `pgvector`.
+- **MongoDB Atlas via Mongoose:** Manages semi-structured conversation histories, embedded citation subdocuments, user feedback ratings (`"up"` / `"down"`), and execution latency telemetry.
 
 ## 2. Folder Structure
 
 ```
 api/
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
 ├── src/
 │   ├── ai/
 │   │   ├── ai-client.ts
@@ -17,7 +21,8 @@ api/
 │   │   ├── prompt-builder.ts
 │   │   └── retrieval.ts
 │   ├── db/
-│   │   └── prisma.ts
+│   │   ├── prisma.ts
+│   │   └── mongo.ts
 │   ├── documents/
 │   │   ├── chunk-text.ts
 │   │   ├── extract-text.ts
@@ -45,90 +50,60 @@ api/
 ```
 
 ## 3. Express Application Configuration
+`api/src/app.ts` configures the middleware stack:
+- **CORS:** Flexible origin callback supporting local development (`http://localhost:3000`) and production Vercel domains (`.vercel.app`).
+- **Body Parsing:** `express.json({ limit: "1mb" })`.
+- **Rate Limiting:** IP-based in-memory rate limiting.
+- **Routes:** `/health`, `/api/auth`, `/api/chats`, `/api/documents`.
+- **Error Handler:** Global centralized error handler catching Zod, Multer, and AppErrors.
 
-`api/src/app.ts` contains the middleware stack and Express configuration:
--   `cors`
--   JSON body parser (1MB limit)
--   `rateLimit`
--   Route definitions
--   `errorHandler`
+## 4. Routes & Endpoints
+- **Authentication (`auth.routes.ts`):** `POST /register`, `POST /login`, `POST /google`.
+- **Chat Management (`chat.routes.ts`):**
+  - `GET /`: List all chats for current user.
+  - `POST /`: Create a new chat.
+  - `GET /:chatId`: Retrieve chat with messages and documents.
+  - `PATCH /:chatId`: Rename chat title.
+  - `DELETE /:chatId`: Delete chat (cascading deletes in PostgreSQL and cleanup in MongoDB).
+  - `GET /:chatId/messages`: Retrieve chat message history.
+  - `POST /:chatId/messages`: Run RAG question answering pipeline.
+  - `PATCH /:chatId/messages/:messageId/rating`: Update user feedback rating in MongoDB.
+  - `GET /:chatId/documents`: List documents linked to chat.
+  - `POST /:chatId/documents`: Ingest document via Multer.
+- **Document Management (`document.routes.ts`):** `DELETE /:documentId`.
 
-## 4. Controllers
+## 5. Polyglot Database Layer
 
-Route files in `api/src/routes/` act as thin controllers, delegating business logic to the services.
--   `auth.routes.ts`: `POST /register`, `POST /login`, `POST /google`
--   `chat.routes.ts`: `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `GET /:id/messages`, `POST /:id/messages`, `GET /:id/documents`, `POST /:id/documents`
--   `document.routes.ts`: `DELETE /:documentId`
+### 5.1 Prisma & PostgreSQL
+- `api/src/db/prisma.ts` exports a singleton `PrismaClient` instance.
+- Handles relational operations, unique email constraints, and cascade deletions (`onDelete: Cascade`).
+- Executes raw SQL for vector operations:
+  ```sql
+  SELECT dc.content, d."originalName", dc."chunkIndex", dc.embedding <=> $1::vector AS distance ...
+  ```
 
-## 5. Service Layer
+### 5.2 Mongoose & MongoDB Atlas
+- `api/src/db/mongo.ts` exports `ChatMessageDoc` model and helper functions.
+- Models:
+  - `ChatMessageDoc`: Fields include `messageId`, `chatId`, `userId`, `role`, `content`, `citations`, `rating`, `telemetry`, and timestamps.
+  - `telemetry`: Embedded subdocument for `embedDurationMs`, `retrievalDurationMs`, `llmDurationMs`, `totalLatencyMs`, `providerUsed`, and `retrievedChunkCount`.
+- Helper methods:
+  - `connectMongo()`: Connects to MongoDB Atlas with connection caching.
+  - `logMongoMessage()`: Asynchronously logs query, assistant response, and performance metrics.
+  - `updateMongoRating()`: Updates user feedback thumbs up/down state.
+  - `deleteMongoMessagesByChat()`: Purges chat messages when chat is removed.
+- **Fail-Safe Mechanism:** In the event of a connection failure or network delay to Atlas, all MongoDB calls fail gracefully without rejecting the HTTP request, guaranteeing that core RAG query workflows stay available.
 
-Business logic resides in `api/src/services/`.
--   `auth.service.ts`: `register`, `login`, `loginWithGoogle`.
--   `chat.service.ts`: `listChats`, `createChat`, `ownedChat`, `getChat`, `renameChat`, `deleteChat`.
--   `document.service.ts`: `listDocuments`, `addDocument`, `removeDocument`.
--   `message.service.ts`: `listMessages`, `ask`.
+## 6. Authentication & Security
+- **Local:** Password hashing via `bcryptjs` with 12 salt rounds.
+- **Google OAuth 2.0:** Verified using Google's `tokeninfo` endpoint to validate audience (`aud`), issuer, and email verification.
+- **JWT:** 7-day expiration with HMAC SHA-256 signature containing `userId` and `email`.
+- **Rate Limiting:** In-memory per-IP sliding window rate limiting (60 requests/minute).
 
-## 6. Database Layer
-
-`api/src/db/prisma.ts` exports a singleton `PrismaClient` instance. Raw SQL is used for vector similarity operations (see `api/src/ai/retrieval.ts`).
-
-## 7. Authentication
-
--   **Local:** Email/password combinations.
--   **Google OAuth 2.0:** Utilizing the `tokeninfo` API to verify tokens, check `aud`, and `email_verified`.
-Implemented in `api/src/services/auth.service.ts`.
-
-## 8. JWT Implementation
-
--   **Library:** `jsonwebtoken`.
--   **Expiry:** 7 days.
--   **Claims:** User ID and email.
--   **Verification:** Done in `api/src/middleware/auth.ts`.
-
-## 9. Password Hashing
-
--   **Library:** `bcryptjs`.
--   **Rounds:** 12 rounds.
-
-## 10. Middleware Stack
-
--   **CORS:** Cross-Origin Resource Sharing.
--   **JSON Parsing:** 1MB limit.
--   **Rate Limiting:** `api/src/middleware/rate-limit.ts`.
--   **Authentication:** `api/src/middleware/auth.ts` (Requires Bearer token, attaches `req.user`).
--   **Error Handling:** `api/src/middleware/error.ts`.
--   **Multer:** Configured for file uploads.
-
-## 11. Validation
-
-`api/src/schemas.ts` defines Zod schemas (e.g., `authSchema`, `loginSchema`, `messageSchema`). Invalid requests are caught and formatted as 400 Bad Request errors.
-
-## 12. Error Handling
-
-`api/src/http/errors.ts` contains the `AppError` class.
-`api/src/http/async-handler.ts` wraps async routes to propagate errors to `next`.
-Status codes used: 200, 201, 204, 400, 401, 404, 409, 413, 415, 429, 500, 502.
-
-## 13. File Upload & Storage
-
--   **Multer:** Filters MIME types.
--   **Cloudinary:** Streamed upload using `raw` and `image` resource types (`api/src/documents/file-storage.ts`).
-
-## 14. Rate Limiting
-
-Implemented in `api/src/middleware/rate-limit.ts`.
--   Uses an in-memory `Map<string, {count, reset}>`.
--   Per-IP tracking.
--   Throws `AppError(429)` on limit breach.
--   **Trade-off:** In-memory map will reset on server restart and doesn't scale across multiple Node.js instances without a centralized store (like Redis, which is *not* used).
-
-## 15. Environment Configuration
-
-Variables are validated using Zod at boot in `api/src/config.ts`.
-Keys include: `DATABASE_URL`, `JWT_SECRET`, `AI_BASE_URL`, `AI_API_KEY`, `AI_CHAT_MODEL`, `AI_EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `MAX_UPLOAD_MB`, `CLOUDINARY_CLOUD_NAME/KEY/SECRET`, `PORT`, `CORS_ORIGIN`, `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS`, `GOOGLE_CLIENT_ID`, `GROQ_API_KEY`, `OPENROUTER_API_KEY/1/2/3`.
-
-## 16. Trade-offs
-
--   In-memory rate limiting instead of Redis.
--   Direct Prisma use instead of repository pattern for simpler architecture.
--   RESTful architecture without GraphQL or gRPC, optimizing for simplicity.
+## 7. Deployment Configuration (Render)
+- **Service Type:** Web Service.
+- **Root Directory:** `api`
+- **Build Command:** `npm install && npx prisma generate && npm run build`
+- **Start Command:** `node dist/server.js`
+- **Health Check Path:** `/health`
+- **Environment Variables:** `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN`, `AI_BASE_URL`, `AI_API_KEY`, `AI_CHAT_MODEL`, `AI_EMBEDDING_MODEL`, `CLOUDINARY_*`, `MONGODB_URI`, `GROQ_API_KEY`, `OPENROUTER_API_KEY*`.

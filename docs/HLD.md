@@ -1,70 +1,84 @@
 # High-Level Design (HLD)
 
 ## 1. Architecture Overview
-rag99 is built on a modern full-stack architecture comprising a Next.js 15 App Router frontend and an Express.js 4 backend. It uses a serverless PostgreSQL database (Neon) augmented with `pgvector` for vector similarity search. The application leverages a robust multi-provider AI client pool to ensure high availability for embedding and LLM completions.
+rag99 is built on a modern full-stack architecture comprising a Next.js 15 App Router frontend (deployed on **Vercel**) and an Express.js 4 backend (deployed on **Render**). 
+
+The system implements a **Polyglot Persistence Architecture**:
+1. **Relational & Vector Store (PostgreSQL + pgvector via Prisma):** Enforces relational integrity, cascading constraints, and exact cosine distance (`<=>`) vector similarity search for document embeddings.
+2. **Document & Telemetry Store (MongoDB Atlas via Mongoose):** Accommodates semi-structured conversational turns, embedded citations, user feedback ratings (thumbs up/down), and RAG execution telemetry (latency breakdown across embedding, retrieval, and LLM stages).
+
+The backend uses a multi-provider AI client pool to rotate between Groq and OpenRouter keys to guarantee high availability.
 
 ## 2. System Architecture Diagram
 
 ```mermaid
 graph TD
-    Client[Next.js 15 Frontend] -->|HTTPS / REST| API[Express.js 4 Backend]
-    API -->|Prisma / SQL| DB[(PostgreSQL + pgvector)]
-    API -->|Upload| Cloudinary[Cloudinary Storage]
-    API -->|Multi-provider Pool| LLM[Groq / OpenRouter APIs]
+    Client["Next.js 15 Frontend (Vercel)"] -->|HTTPS / REST| API["Express.js 4 Backend (Render)"]
+    API -->|Prisma / SQL| PG[("PostgreSQL (Neon) + pgvector")]
+    API -->|Mongoose| Mongo[("MongoDB Atlas")]
+    API -->|Upload / Delete| Cloudinary["Cloudinary Storage"]
+    API -->|Multi-provider Pool| LLM["Groq / OpenRouter APIs"]
     
     subgraph Backend Components
         Auth[Auth Middleware]
         Router[API Routes]
         Pool[AI Client Pool]
         Task[Background Ingestion]
+        Polyglot[Polyglot Logger & Rating]
     end
     
     API --- Auth
     API --- Router
     API --- Pool
     API --- Task
+    API --- Polyglot
 ```
 
 ## 3. Component Diagram
 
 ```mermaid
 graph TD
-    subgraph Frontend (Next.js)
+    subgraph Frontend (Next.js - Vercel)
         Context[ChatContext]
         UI[shadcn/ui + Tailwind]
         ClientAPI[web/lib/api.ts]
     end
     
-    subgraph Backend (Express.js)
+    subgraph Backend (Express.js - Render)
         AuthService[auth.service.ts]
         ChatRoutes[chat.routes.ts]
+        MessageService[message.service.ts]
         PromptBuilder[prompt-builder.ts]
         AIPool[client-pool.ts]
+        MongoModel[mongo.ts ChatMessageDoc]
     end
     
     UI --> Context
     Context --> ClientAPI
     ClientAPI --> ChatRoutes
     ChatRoutes --> AuthService
-    ChatRoutes --> PromptBuilder
+    ChatRoutes --> MessageService
+    MessageService --> PromptBuilder
     PromptBuilder --> AIPool
+    MessageService --> MongoModel
 ```
 
 ## 4. System Components
-- **Frontend (WHAT):** Next.js 15 React application. **(WHERE):** `web/` directory. **(HOW):** Uses Context API (`ChatContext`) for state, Tailwind/shadcn for UI. **(WHY):** Provides a modern, responsive user experience.
-- **Backend API (WHAT):** Node.js Express 4 server. **(WHERE):** `api/src/`. **(HOW):** REST endpoints validated by Zod. **(WHY):** Robust routing and middleware support.
-- **Database (WHAT):** PostgreSQL with Neon serverless and pgvector. **(WHERE):** Connected via Prisma ORM. **(HOW):** Stores relational data and 1024-dim embeddings. **(WHY):** Unified storage for metadata and vector search.
-- **AI Pool (WHAT):** Multi-provider round-robin pool. **(WHERE):** `api/src/ai/client-pool.ts`. **(HOW):** Rotates through Groq and OpenRouter keys. **(WHY):** Prevents single point of failure.
+- **Frontend (WHAT):** Next.js 15 React application. **(WHERE):** `web/` directory. **(HOW):** Uses Context API (`ChatContext`) for state, Tailwind/shadcn for UI. **(WHY):** Provides a modern, responsive user experience. Deployed on Vercel.
+- **Backend API (WHAT):** Node.js Express 4 server. **(WHERE):** `api/src/`. **(HOW):** REST endpoints validated by Zod, modular routing and controllers. **(WHY):** Robust routing, middleware support, and background job handling. Deployed on Render.
+- **Relational & Vector DB (WHAT):** PostgreSQL with Neon serverless and pgvector. **(WHERE):** Connected via Prisma ORM. **(HOW):** Stores relational data (Users, Chats, Messages, Documents) and 1024-dim embeddings in `DocumentChunk`. **(WHY):** Unified relational integrity with native vector search.
+- **Document & Telemetry DB (WHAT):** MongoDB Atlas. **(WHERE):** `api/src/db/mongo.ts`. **(HOW):** Mongoose schema for chat messages, embedded citation arrays, ratings, and time-series latency telemetry. **(WHY):** Decouples write-heavy analytics and variable document schemas from transactional tables.
+- **AI Pool (WHAT):** Multi-provider round-robin pool. **(WHERE):** `api/src/ai/client-pool.ts`. **(HOW):** Rotates through Groq and OpenRouter keys with disk-persisted pointer. **(WHY):** Prevents provider lock-in and avoids rate limit outages.
 
 ## 5. Request Flows
 
-### Authentication Flow (Email/Password)
+### Authentication Flow (Email/Password & Google OAuth)
 ```mermaid
 sequenceDiagram
     Client->>+API: POST /api/auth/login {email, password}
     API->>API: Zod Validation (loginSchema)
-    API->>DB: Find User by Email
-    DB-->>API: User Record + Hash
+    API->>PG: Find User by Email (Prisma)
+    PG-->>API: User Record + Hash
     API->>API: bcryptjs compare
     API->>API: Sign JWT (7d expiry)
     API-->>-Client: 200 {token, user}
@@ -74,98 +88,89 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     Client->>+API: POST /api/chats/:chatId/documents (Multipart)
-    API->>API: Multer limit checks
+    API->>API: Multer limit checks (10MB)
     API->>Cloudinary: saveUpload()
-    API->>DB: create Document (status: PROCESSING)
+    API->>PG: create Document (status: PROCESSING)
     API-->>-Client: 201 Created (Async ingestion started)
     
     note over API: Background Detached Promise
     API->>API: extractText (pdf-parse / mammoth)
     API->>API: chunkText (2000 size, 200 overlap)
     API->>LLM: embedRotated() via OpenRouter
-    API->>DB: INSERT INTO DocumentChunk (vector cast)
-    API->>DB: Update Document (status: READY)
+    API->>PG: INSERT INTO DocumentChunk (vector cast)
+    API->>PG: Update Document (status: READY)
 ```
 
-### RAG Query Flow
+### RAG Query & Polyglot Telemetry Flow
 ```mermaid
 sequenceDiagram
     Client->>+API: POST /api/chats/:chatId/messages {content, mode}
-    API->>LLM: embed(content, 'query')
-    API->>DB: SELECT TOP 4 cosine distance <=>
-    DB-->>API: Retrieved Chunks
+    API->>LLM: embed(content, 'query') (tracks embedDurationMs)
+    API->>PG: SELECT TOP 4 cosine distance <=> (tracks retrievalDurationMs)
+    PG-->>API: Retrieved Chunks
     API->>API: buildMessages (PromptBuilder)
-    API->>LLM: answerRotated (JSON Mode)
+    API->>LLM: answerRotated (JSON Mode) (tracks llmDurationMs)
     LLM-->>API: {answer, citations}
-    API->>DB: create Message (ASSISTANT)
+    API->>PG: create Message (ASSISTANT in PostgreSQL)
+    API-)Mongo: logMongoMessage() (async write: citations + latency telemetry)
     API-->>-Client: 201 {Message}
 ```
 
-## 6. Data Flow
-Data enters via standard HTTP JSON payloads or multipart forms. Express limits JSON to 1MB. Validation occurs via Zod schemas (`api/src/schemas.ts`). Parsed text is chunked and sent to OpenRouter for embedding (1024 dimensions) before storage in `DocumentChunk`.
+### User Feedback Flow (Thumbs Up / Down)
+```mermaid
+sequenceDiagram
+    Client->>+API: PATCH /api/chats/:chatId/messages/:messageId/rating {rating: "up" | "down"}
+    API->>Mongo: updateOne({messageId}, {$set: {rating}})
+    Mongo-->>API: Acknowledged
+    API-->>-Client: 200 {ok: true, rating}
+```
+
+## 6. Polyglot Persistence Architecture Rationale
+
+| Dimension | PostgreSQL + pgvector (Prisma) | MongoDB Atlas (Mongoose) |
+|---|---|---|
+| **Role** | Transactional core & Vector search | Telemetry, Audit log & User feedback |
+| **Data Stored** | User accounts, Chat metadata, Documents, Document Chunks with 1024-dim vectors | Conversational message documents, embedded citation subdocuments, timing telemetry, ratings |
+| **Guarantees** | Strict ACID, Referential Integrity (`ON DELETE CASCADE`) | High-throughput document writes, flexible schema evolution |
+| **Resilience Strategy** | Primary dependency (database connection required) | Fail-safe bypass: if MongoDB is unreachable, RAG query processing completes normally without error |
 
 ## 7. AI Architecture
 - **WHAT:** Intelligent text generation and semantic embedding.
-- **WHERE:** `api/src/ai/client-pool.ts`, `api/src/ai/prompt-builder.ts`
-- **HOW:** Uses `text-embedding-3-small` (1024 dims) for embeddings. Generates completions using JSON mode `{type:'json_object'}` via Groq (`llama-3.3-70b-versatile`) or OpenRouter (`meta-llama/llama-3.3-70b-instruct`). Uses `.pool-index` to track rotation state.
+- **WHERE:** `api/src/ai/client-pool.ts`, `api/src/ai/prompt-builder.ts`, `api/src/ai/retrieval.ts`.
+- **HOW:** Uses `text-embedding-3-small` (1024 dims) for embeddings. Generates completions using JSON mode `{type:'json_object'}` via Groq (`llama-3.3-70b-versatile`) or OpenRouter (`meta-llama/llama-3.3-70b-instruct`).
 - **WHY:** JSON mode guarantees parseable output for the `{answer, citations}` schema. Multi-provider rotation guarantees resilience.
 
-## 8. Database Architecture
+## 8. Deployment Architecture
 
 ```mermaid
-erDiagram
-    User ||--o{ Chat : owns
-    Chat ||--o{ Message : contains
-    Chat ||--o{ Document : contains
-    Document ||--o{ DocumentChunk : chunked_into
+graph LR
+    subgraph Vercel
+        V[Next.js 15 Web App]
+    end
+    subgraph Render
+        R[Express.js Node API Web Service]
+    end
+    subgraph Cloud Data Services
+        PG[Neon PostgreSQL + pgvector]
+        M[MongoDB Atlas Cluster]
+        C[Cloudinary CDN]
+    end
     
-    User {
-        UUID id PK
-        String email UK
-        String passwordHash
-    }
-    Chat {
-        UUID id PK
-        UUID userId FK
-    }
-    Document {
-        UUID id PK
-        UUID chatId FK
-        String status
-    }
-    DocumentChunk {
-        UUID id PK
-        UUID documentId FK
-        String content
-        Unsupported embedding
-    }
+    V -->|HTTPS REST| R
+    R --> PG
+    R --> M
+    R --> C
 ```
-*Note: All foreign keys utilize `ON DELETE CASCADE`.*
 
-## 9. Security Architecture
-- **Auth:** JWT tokens (7 days expiry), generated and verified in `api/src/middleware/auth.ts`.
-- **Hashing:** Passwords hashed with `bcryptjs` (12 rounds).
-- **Validation:** Strict runtime validation using Zod schemas (`authSchema`, `chatParamsSchema`).
-- **Rate Limiting:** In-memory map (IP-based) blocking > max requests per window.
-- **Storage Limits:** Multer limits file size and types (pdf, txt, md, docx).
+- **Frontend (Vercel):** Connected to GitHub repository. Root Directory set to `web`. Environment variable `NEXT_PUBLIC_API_URL` points to the live Render backend URL.
+- **Backend (Render):** Deployed as a Web Service. Root Directory: `api` (or monorepo root with `npm run build:api`). Start command: `node dist/server.js`. Managed environment variables for database URLs, AI keys, and CORS.
+- **CORS Handling:** Configured dynamically to accept requests from localhost during development and production `.vercel.app` domains.
 
-## 10. Deployment Architecture
-Designed for a streamlined development setup using `npm workspaces` monorepo.
-- `tsx watch` for hot-reloading the backend.
-- `concurrently` for running frontend and backend simultaneously.
-
-## 11. Major Design Decisions
+## 9. Major Design Decisions
 
 | Decision | Alternatives Considered | Trade-off / Rationale |
 |----------|-------------------------|------------------------|
-| **PostgreSQL + pgvector** | Pinecone, Redis, MongoDB | **PRO:** Single datastore, atomic transactions, foreign keys. **CON:** Slightly slower ANN search at massive scale (acceptable for V1). |
-| **Express.js API** | Next.js API Routes | **PRO:** Clear separation of concerns, easier background task management. **CON:** Requires separate server process. |
-| **In-Memory Rate Limit** | Redis | **PRO:** Zero dependency, easy local dev. **CON:** State lost on restart, doesn't scale horizontally. |
-| **Multi-Provider Pool** | Single OpenAI / Groq API | **PRO:** High availability, bypass rate limits. **CON:** Complex local index management (`.pool-index`). |
-| **Async Background Ingestion** | Synchronous wait | **PRO:** Immediate 201 response, fast UI. **CON:** User must poll or wait to see processing complete. |
-
-## 12. Scalability & Future Improvements (FUTURE)
-- **Redis Integration (FUTURE):** For distributed rate limiting and persistent background job queues (e.g., BullMQ) instead of detached Promises.
-- **Streaming (FUTURE):** True SSE stream implementation for token-by-token UI updates, replacing the current blocking JSON-mode generation.
-- **Microservices (FUTURE):** Extracting document ingestion into a standalone worker service to scale independently of the main API.
-- **Dockerization (FUTURE):** Adding Dockerfiles and `docker-compose` for unified deployments.
+| **Polyglot Persistence** | Monolithic PostgreSQL only | **PRO:** Offloads chat telemetry and unindexed citation JSON from PG; gives rich document storage for ratings. **CON:** Requires managing two database connection strings. |
+| **PostgreSQL + pgvector** | Pinecone, Milvus | **PRO:** Atomic joins between chunks, documents, and chats. Zero data synchronization delays. **CON:** Requires explicit vector index tuning at huge scale. |
+| **Multi-Provider Pool** | Single OpenAI API | **PRO:** Zero downtime during provider outages or rate limits. **CON:** Minor logic overhead managing round-robin pointer. |
+| **Fail-Safe Mongo Bypass** | Hard dependency on MongoDB | **PRO:** If Atlas has DNS/network blip, core chat and RAG flow continue uninterrupted. **CON:** Telemetry is skipped during outage window. |

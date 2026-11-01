@@ -3,6 +3,7 @@ import { embed, answer } from "../ai/ai-client.js";
 import { buildMessages, parseAnswer } from "../ai/prompt-builder.js";
 import { retrieve } from "../ai/retrieval.js";
 import { ownedChat } from "./chat.service.js";
+import { logMongoMessage } from "../db/mongo.js";
 
 export async function listMessages(userId: string, chatId: string) {
   await ownedChat(userId, chatId);
@@ -76,7 +77,7 @@ export async function ask(userId: string, chatId: string, content: string, mode:
     };
   });
 
-  return prisma.message.create({
+  const savedMessage = await prisma.message.create({
     data: {
       chatId,
       role: "ASSISTANT",
@@ -84,4 +85,24 @@ export async function ask(userId: string, chatId: string, content: string, mode:
       citations: citationsWithContent,
     },
   });
+
+  // Polyglot persistence: asynchronously log conversation turn & telemetry to MongoDB
+  logMongoMessage({
+    messageId: savedMessage.id,
+    chatId,
+    userId,
+    role: "ASSISTANT",
+    content: result.answer,
+    citations: citationsWithContent,
+    telemetry: {
+      embedDurationMs: Date.now() - startEmbed,
+      retrievalDurationMs: Date.now() - startRetrieve,
+      llmDurationMs: Date.now() - startAnswer,
+      totalLatencyMs: Date.now() - startEmbed,
+      providerUsed: "client-pool",
+      retrievedChunkCount: matches.length,
+    },
+  }).catch(() => {});
+
+  return savedMessage;
 }

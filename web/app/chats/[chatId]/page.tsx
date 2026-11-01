@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 
 export default function ChatPage() {
-  const { chatId } = useParams<{ chatId: string }>();
+  const { chatId } = useParams<{ chatId: string }>(); 
   const router = useRouter();
   
   const fileInput = useRef<HTMLInputElement>(null);
@@ -159,10 +159,19 @@ export default function ChatPage() {
   };
 
   const handleRating = (messageId: string, rating: "up" | "down") => {
+    const nextRating = ratingMap[messageId] === rating ? "" : rating;
     setRatingMap((current) => ({
       ...current,
-      [messageId]: current[messageId] === rating ? "" : (rating as any),
+      [messageId]: nextRating as any,
     }));
+
+    // Send rating update to backend to persist into MongoDB
+    if (chatId) {
+      api(`/api/chats/${chatId}/messages/${messageId}/rating`, {
+        method: "PATCH",
+        body: JSON.stringify({ rating: nextRating }),
+      }).catch((err) => console.warn("Failed to persist feedback rating:", err));
+    }
   };
 
   const handleRetry = async (messageId: string) => {

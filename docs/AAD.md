@@ -1,63 +1,58 @@
 # AI Architecture & Development (AAD)
 
-This document details the Artificial Intelligence and Retrieval-Augmented Generation (RAG) architecture of rag99.
+This document details the Artificial Intelligence, Retrieval-Augmented Generation (RAG) pipeline, and telemetry tracking architecture of rag99.
 
 ## 1. RAG Pipeline Overview
 
-The system uses a custom-built Retrieval-Augmented Generation pipeline.
+The system uses a custom-built, multi-stage Retrieval-Augmented Generation pipeline combining PostgreSQL vector search with MongoDB telemetry logging.
 
 ```mermaid
 flowchart TD
-    User([User Question]) --> C[Embed Question]
+    User([User Question]) --> C[Embed Question via AI Client]
     C --> D[(Vector Search in pgvector)]
-    D --> E[Retrieve Top-4 Chunks]
-    E --> F[Construct Prompt Builder]
-    F --> G[Multi-Provider AI Pool]
-    G --> H[Parse JSON Response]
-    H --> I([Answer with Citations])
+    D --> E[Retrieve Top-4 Chunks LIMIT 4]
+    E --> F[Construct Structured Prompt]
+    F --> G[Multi-Provider AI Pool Groq / OpenRouter]
+    G --> H[Parse JSON Response answer & citations]
+    H --> I[Store Message in PostgreSQL]
+    H --> J[Log Telemetry & Citations in MongoDB]
+    I --> K([Render in UI with Context Cards])
 ```
 
 ## 2. Document Ingestion Pipeline
 
 When a user uploads a document, the system processes it as follows:
-1.  **Upload:** Saved to Cloudinary (raw + image resource types).
-2.  **Extract:** Text is extracted based on file type.
-3.  **Chunk:** Text is split into overlapping chunks.
-4.  **Embed:** Each chunk is embedded using the embedding model.
-5.  **Store:** Inserted into the `DocumentChunk` table with `::vector`.
+1. **Upload:** File is saved to Cloudinary (supporting raw and document mime types).
+2. **Text Extraction:** Ingested buffer is converted to plain text via `pdf-parse`, `mammoth`, or UTF-8 decoding.
+3. **Chunking:** Text is split using a sliding window algorithm (2000 characters chunk size, 200 character overlap).
+4. **Embedding:** Each chunk is converted to a 1024-dimensional dense vector using `text-embedding-3-small`.
+5. **Storage:** Stored in the `DocumentChunk` table with `::vector` casting in PostgreSQL.
+6. **State Transition:** Status updates from `PROCESSING` to `READY` (or `FAILED` with `errorMessage` on failure).
 
 ## 3. Document Parsing
-
 Implemented in `api/src/documents/extract-text.ts`. Supported formats:
--   **PDF:** Parsed using `pdf-parse`.
--   **DOCX:** Parsed using `mammoth`.
--   **TXT/MD:** Parsed as UTF-8.
--   **Unsupported:** Throws `AppError(415)`.
+- **PDF:** Parsed using `pdf-parse`.
+- **DOCX:** Parsed using `mammoth`.
+- **TXT / MD:** Decoded directly as UTF-8 string.
+- **Unsupported MIME Types:** Rejection with `AppError(415, "Unsupported file format")`.
 
 ## 4. Chunking Strategy
-
 Implemented in `api/src/documents/chunk-text.ts`.
--   **Size:** 2000 characters.
--   **Overlap:** 200 characters.
--   **Method:** Sliding window algorithm to preserve context across boundaries.
+- **Size:** 2000 characters.
+- **Overlap:** 200 characters.
+- **Method:** Sliding window algorithm to prevent loss of semantic context across chunk edges.
 
 ## 5. Embedding Generation
+- **Model:** OpenRouter (`openai/text-embedding-3-small`).
+- **Dimensions:** 1024 dimensions.
+- **Client:** `api/src/ai/client-pool.ts` using `embedRotated()`.
 
--   **Model:** OpenRouter (`text-embedding-3-small`).
--   **Dimension:** 1024 dimensions.
--   **Client:** `api/src/ai/client-pool.ts` using `embedRotated()`.
-
-## 6. pgvector Integration
-
--   **Database:** PostgreSQL with `pgvector` extension.
--   **Metric:** Cosine distance (`<=>`).
--   **Query:** Raw SQL.
--   **Filtering:** Scoped to `chatId`.
-
-## 7. Similarity Search
-
+## 6. pgvector Vector Similarity Search
 Implemented in `api/src/ai/retrieval.ts`.
-Uses raw SQL to retrieve the top 4 relevant chunks (LIMIT 4) based on cosine distance.
+- **Database:** PostgreSQL with `pgvector` extension.
+- **Distance Metric:** Cosine distance operator (`<=>`).
+- **Scoping:** Filtered strictly by `chatId`.
+- **Query:**
 ```sql
 SELECT dc.content, d."originalName", dc."chunkIndex", dc.embedding <=> $1::vector AS distance 
 FROM "DocumentChunk" dc 
@@ -67,42 +62,38 @@ ORDER BY dc.embedding <=> $1::vector
 LIMIT $3
 ```
 
-## 8. Prompt Engineering
-
+## 7. Prompt Engineering & Citation Enforcement
 Implemented in `api/src/ai/prompt-builder.ts`.
--   System prompts instruct the LLM to output JSON formatting containing `{answer, citations: [{source, chunk}]}`.
--   **Modes:**
-    -   `concise`: Max 3 sentences.
-    -   `explain`: Structured deep dive.
--   History context is appended to the prompt.
+- System prompts enforce strict grounding in provided evidence chunks.
+- Output format enforced via `{ response_format: { type: "json_object" } }`.
+- Expected JSON schema:
+```json
+{
+  "answer": "string response based strictly on evidence",
+  "citations": [
+    { "source": "Document.pdf", "chunk": 0, "content": "relevant excerpt" }
+  ]
+}
+```
+- **Modes:**
+  - `concise`: Maximum 3 sentences for rapid scanning.
+  - `explain`: Structured deep-dive explanation.
 
-## 9. Structured Output
-
--   **Enforcement:** `response_format: { type: 'json_object' }`.
--   **Parsing:** `parseAnswer(raw)` parses the JSON, with a fallback to raw string processing if the LLM output is malformed.
-
-## 10. Multi-Provider AI Pool
-
+## 8. Multi-Provider AI Pool & Fault Tolerance
 Implemented in `api/src/ai/client-pool.ts`.
--   **Chat:** Groq (`llama-3.3-70b-versatile`) + OpenRouter (`meta-llama/llama-3.3-70b-instruct`).
--   **Embed:** OpenRouter (`text-embedding-3-small`).
--   **Routing:** Round-robin selection.
--   **Persistence:** Disk-persisted `.pool-index` and `.embed-index` to maintain state across restarts.
--   **Failure Handling:** Rotates to the next provider on failure. Throws `AppError(502)` if all are exhausted.
+- **Providers:** Groq (`llama-3.3-70b-versatile`) and multiple OpenRouter keys (`meta-llama/llama-3.3-70b-instruct`).
+- **Routing:** Round-robin selection across active keys.
+- **Persistence:** State tracked in `.pool-index` and `.embed-index` to preserve rotation across restarts.
+- **Failover:** Automatic failover to the next available provider upon receiving HTTP 429, 502, or 503 errors.
 
-## 11. Hallucination Mitigation
-
-The system prompt explicitly instructs the LLM to rely only on the provided evidence blocks. Proper citation of chunks and sources is required in the JSON structure.
-
-## 12. Trade-offs
-
--   **pgvector vs Dedicated Vector DB:** We use pgvector as a single source of truth for relational and vector data, reducing operational overhead, but it may scale less efficiently than specialized vector databases (e.g., Pinecone or Milvus) at massive scales.
--   **Fixed Chunking vs Semantic Chunking:** Sliding window of 2000 chars is simpler to implement but might split natural semantic boundaries unlike semantic-aware chunking.
--   **JSON Mode Limitations:** Not all models strictly follow JSON constraints, necessitating the `parseAnswer` fallback.
-
-## 13. Future Improvements
-
--   **FUTURE:** Implement semantic chunking.
--   **FUTURE:** Hybrid search (Keyword + Vector).
--   **FUTURE:** Implement Reranking (e.g., Cohere Rerank) to improve retrieval quality.
--   **FUTURE:** Streaming LLM responses instead of waiting for the full generation to complete.
+## 9. RAG Telemetry & Audit Logging (MongoDB)
+Implemented in `api/src/db/mongo.ts` and `api/src/services/message.service.ts`.
+Each question-answer cycle records an audit document in MongoDB capturing:
+- `embedDurationMs`: Time spent generating vector embedding.
+- `retrievalDurationMs`: Execution time of the `pgvector` cosine similarity query.
+- `llmDurationMs`: Latency of the LLM generation.
+- `totalLatencyMs`: End-to-end processing duration.
+- `providerUsed`: Identifier of the pool provider that fulfilled the completion.
+- `retrievedChunkCount`: Number of document chunks supplied as context.
+- `rating`: Feedback state (`"up"`, `"down"`, or `""`).
+- **Fail-safe Design:** If MongoDB is unreachable, the system logs a bypass notice and returns the answer to the user with zero interruption.
