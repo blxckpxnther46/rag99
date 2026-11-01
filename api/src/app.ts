@@ -25,6 +25,12 @@ app.use(
     credentials: true,
   })
 );
+app.use((req, _res, next) => {
+  if (req.url.startsWith("//")) {
+    req.url = req.url.replace(/^\/+/, "/");
+  }
+  next();
+});
 app.use(express.json({ limit: "1mb" }));
 app.use(rateLimit);
 

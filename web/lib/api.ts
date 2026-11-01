@@ -1,4 +1,5 @@
-const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const rawBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const base = rawBase.replace(/\/+$/, "");
 
 export async function api<T>(path: string, init: RequestInit = {}) {
   const token = typeof window === "undefined"
@@ -15,7 +16,8 @@ export async function api<T>(path: string, init: RequestInit = {}) {
     headers.set("authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${base}${path}`, {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const response = await fetch(`${base}${cleanPath}`, {
     ...init,
     headers,
   });
