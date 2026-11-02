@@ -1,3 +1,4 @@
+import { cache } from "../db/cache.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -134,6 +135,18 @@ export async function answerRotated(messages: unknown[]) {
 }
 
 export async function embedRotated(input: string, type: "query" | "passage" = "passage") {
+  // Caching with Redis: check cache for pre-computed vector embedding
+  const cacheKey = `embed:${input.trim().slice(0, 100)}:${input.length}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length === 1024) {
+        return parsed as number[];
+      }
+    } catch {}
+  }
+
   if (embeddingTargets.length === 0) {
     throw new AppError(500, "No OpenRouter keys configured for embedding generation.");
   }
@@ -177,6 +190,8 @@ export async function embedRotated(input: string, type: "query" | "passage" = "p
 
       console.log(`[ClientPool] ${target.name} embedding succeeded!`);
       saveRotationIndex(embedIndexPath, embeddingIndex);
+      // Cache with 1-hour TTL (3600s) to eliminate repeated vector embedding API calls
+      await cache.set(cacheKey, JSON.stringify(embedding), 3600).catch(() => {});
       return embedding as number[];
     } catch (error) {
       console.warn(`[ClientPool] ${target.name} embedding failed:`, (error as Error).message);
