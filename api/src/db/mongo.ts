@@ -35,6 +35,11 @@ export const RagTelemetrySubSchema = new Schema(
     totalLatencyMs: { type: Number, default: 0 },
     providerUsed: { type: String, default: "unknown" },
     retrievedChunkCount: { type: Number, default: 0 },
+    // Token & Cost Monitoring
+    promptTokens: { type: Number, default: 0 },
+    completionTokens: { type: Number, default: 0 },
+    totalTokens: { type: Number, default: 0 },
+    estimatedCostUsd: { type: Number, default: 0 },
   },
   { _id: false }
 );
@@ -211,6 +216,10 @@ export async function logMongoMessage(data: {
     totalLatencyMs?: number;
     providerUsed?: string;
     retrievedChunkCount?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    estimatedCostUsd?: number;
   };
 }) {
   try {
