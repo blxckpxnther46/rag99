@@ -20,7 +20,7 @@ Users frequently have large, complex documents but struggle to extract specific 
 - Ensure high availability of AI services through provider rotation (Groq + OpenRouter).
 - Offer a responsive, modern UI with clear feedback states (streaming text, thinking states, context cards).
 - Secure user data and isolate context per chat.
-- Implement Polyglot Persistence: PostgreSQL for ACID transactions and vector embeddings; MongoDB for conversation telemetry and user feedback ratings.
+- Implement Polyglot Persistence: PostgreSQL for ACID transactions, document uploads, and vector embeddings (Document and DocumentChunk models); MongoDB strictly for conversation telemetry and user feedback ratings (MongoDB never stores document files).
 
 ## 6. User Journey
 1. **Onboarding:** User signs up via Email/Password or Google OAuth.
@@ -40,7 +40,7 @@ Users frequently have large, complex documents but struggle to extract specific 
 - **As a user, I want to rate answers (thumbs up / down)** to provide quality feedback.
   - *Implementation Evidence:* `web/app/chats/[chatId]/page.tsx` (handleRating), `PATCH /api/chats/:chatId/messages/:messageId/rating`, `api/src/db/mongo.ts`.
 - **As a user, I want the system to remain available even if an AI provider goes down** so my work isn't interrupted.
-  - *Implementation Evidence:* `api/src/ai/client-pool.ts` (round-robin multi-provider).
+  - *Implementation Evidence:* `api/src/ai/client-pool.ts` (multi-provider rotation between Groq and OpenRouter keys for LLM completions; uses a single standardized 1024-dimension embedding model text-embedding-3-small via OpenRouter key rotation to guarantee vector space consistency).
 
 ## 8. Functional Requirements
 

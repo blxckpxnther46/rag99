@@ -22,7 +22,7 @@ api/
       mongo.ts         # Mongoose connection, ChatMessageDoc schema, model, and CRUD helpers
     ai/
       ai-client.ts     # Facade: embed() and answer() -> client-pool
-      client-pool.ts   # Multi-provider round-robin (Groq + OpenRouter), disk-persisted index
+      client-pool.ts   # Multi-provider round-robin for LLM (Groq + OpenRouter); single standardized 1024-dim embedding model (text-embedding-3-small) via key rotation
       prompt-builder.ts # buildMessages() and parseAnswer() for RAG prompts
       retrieval.ts     # pgvector cosine distance raw SQL query
     documents/
@@ -222,7 +222,8 @@ export const ChatMessageDoc =
   mongoose.model("ChatMessageDoc", ChatMessageDocSchema, "chat_messages");
 ```
 
-#### MongoDB CRUD Operations Implemented:
+#### MongoDB CRUD Operations Implemented (Telemetry & Feedback Only):
+> **Note on Document Storage:** All document uploads, processing, and chunk vectors reside in PostgreSQL (`Document` and `DocumentChunk`). The following MongoDB CRUD operations handle conversational telemetry and user feedback:
 1. **Create:** `logMongoMessage(params)` logs the user query and assistant response with subdocument citations and latency measurements.
 2. **Read:** `ChatMessageDoc.find({ chatId })` queries full audit histories.
 3. **Update (Feedback):** `updateMongoRating(messageId, rating)` updates thumbs-up/down ratings for user responses.

@@ -7,7 +7,10 @@ The system implements a **Polyglot Persistence Architecture**:
 1. **Relational & Vector Store (PostgreSQL + pgvector via Prisma):** Enforces relational integrity, cascading constraints, and exact cosine distance (`<=>`) vector similarity search for document embeddings.
 2. **Document & Telemetry Store (MongoDB Atlas via Mongoose):** Accommodates semi-structured conversational turns, embedded citations, user feedback ratings (thumbs up/down), and RAG execution telemetry (latency breakdown across embedding, retrieval, and LLM stages).
 
-The backend uses a multi-provider AI client pool to rotate between Groq and OpenRouter keys to guarantee high availability.
+The system implements clear architectural separation for AI operations:
+- **LLM Chat Completions:** Multi-provider round-robin rotation across Groq (llama-3.3-70b-versatile) and multiple OpenRouter keys (meta-llama/llama-3.3-70b-instruct) for fault tolerance.
+- **Vector Embeddings:** Uses a single standardized embedding model (text-embedding-3-small, 1024 dimensions) routed through OpenRouter key rotation to guarantee mathematical compatibility between document chunk embeddings and query vectors (never mixing different embedding models).
+- **Document Storage Clarification:** All document files, parsed text, and vector chunks are stored EXCLUSIVELY in PostgreSQL (Document and DocumentChunk models). MongoDB is NOT used for document storage; it solely records conversational telemetry, embedded citations, and user feedback ratings.
 
 ## 2. System Architecture Diagram
 
@@ -127,6 +130,11 @@ sequenceDiagram
 
 ## 6. Polyglot Persistence Architecture Rationale
 
+> **CRITICAL ARCHITECTURAL DISTINCTION:**
+> - **Document Uploads & Chunks:** Handled **EXCLUSIVELY by PostgreSQL (`Document` and `DocumentChunk` models)** and Cloudinary. MongoDB is **NEVER** used to store uploaded document files, binary text, or chunk embeddings.
+> - **MongoDB Role:** MongoDB Atlas is strictly used for **conversational message telemetry (`ChatMessageDoc`), embedded citations, user feedback ratings (thumbs up/down), and latency measurements**.
+
+
 | Dimension | PostgreSQL + pgvector (Prisma) | MongoDB Atlas (Mongoose) |
 |---|---|---|
 | **Role** | Transactional core & Vector search | Telemetry, Audit log & User feedback |
@@ -163,7 +171,7 @@ graph LR
 ```
 
 - **Frontend (Vercel):** Connected to GitHub repository. Root Directory set to `web`. Environment variable `NEXT_PUBLIC_API_URL` points to the live Render backend URL.
-- **Backend (Render):** Deployed as a Web Service. Root Directory: `api` (or monorepo root with `npm run build:api`). Start command: `node dist/server.js`. Managed environment variables for database URLs, AI keys, and CORS.
+- **Backend (Render):** Deployed as a Web Service. Render natively supports both native Node.js environments and containerized Docker deployments using `api/Dockerfile`. In `api/Dockerfile`, `EXPOSE 4000` serves as internal container port documentation, and `CMD ["node", "dist/server.js"]` specifies the runtime entrypoint. In Render deployments, Render dynamically assigns a host port via `process.env.PORT` which `api/src/config.ts` binds to dynamically, routing public HTTPS traffic into the container.
 - **CORS Handling:** Configured dynamically to accept requests from localhost during development and production `.vercel.app` domains.
 
 ## 9. Major Design Decisions
