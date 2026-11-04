@@ -175,17 +175,23 @@ Detailed technical specifications and design documentation can be found in the `
 
 | Concept | Layer | Implementation Evidence |
 |---|---|---|
+| **JavaScript — Hoisting** | Frontend & Backend | `web/components/ThinkingState.tsx` (`const STAGES` in Temporal Dead Zone vs hoisted `function useSequence`), `api/src/services/auth.service.ts` (block-scoped `let user` vs `var`) |
+| **JavaScript — Event loop** | Backend & Frontend | `api/src/services/auth.service.ts` (Call Stack synchronous validation, Libuv TCP I/O for `prisma.user.create`, worker thread pool for `bcrypt.hash`, Microtask Queue Promise resolution), `web/components/ThinkingState.tsx` (`setTimeout` macrotasks) |
+| **MongoDB CRUD Operations** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (`logMongoMessage` for CREATE, `getChatAnalyticsPipeline` for RETRIEVE), `api/src/routes/chat.routes.ts` (`updateOne` rating for UPDATE, `deleteMany` for DELETE) |
+| **MongoDB Schema Modeling** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (Embedding: `CitationSubSchema`, `RagTelemetrySubSchema`; Referencing: `ChatSessionMetaSchema.lastMessageRef` and `.populate()`) |
+| **Multi-step agent** | AI App Engineering | `web/components/ThinkingState.tsx` (`VARIANTS.Steps.rows` sequential UI milestone execution), `api/src/services/message.service.ts` (embedding -> retrieval -> prompt -> synthesis) |
+| **RAG — embeddings & vector retrieval** | AI App Engineering | `api/src/ai/retrieval.ts` (pgvector `<=>` cosine distance, 1024-dimension float vectors, strict `chatId` context isolation) |
+| **Backend deployment** | Backend & DevOps | `api/Dockerfile` (multi-stage build on `node:20-alpine`, `EXPOSE 4000`), `render.yaml` (Render Web Service with dynamic `PORT` binding in `api/src/server.ts`) |
+| **Loading & error UI states** | Frontend | `web/components/LoadingState.tsx` (`label`, `variant`, `LoaderGrid` 3x3 delay matrix, `useElapsed` timer with cleanup), `web/app/chats/[chatId]/page.tsx` (error banner fallback) |
+| **Prompt injection awareness & defenses** | Security & Auth | `api/src/middleware/sanitization.ts` (`PROMPT_INJECTION_PATTERNS`, `SPECIAL_TOKENS` stripping), `api/src/ai/prompt-builder.ts` (delimiter sandboxing) |
+| **LLM Eval Sets** | AI App Engineering | `api/src/self-check.ts` (pre-flight automated regression test for chunking and JSON parsing), `api/src/db/mongo.ts` (`RagTelemetrySubSchema` latency, token, and cost tracking) |
 | **Embedding vs Referencing** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (`CitationSubSchema` embedded in `ChatMessageDocSchema`; `MongoChatSession` referencing via `ref: "ChatMessage"` and `.populate()`) |
 | **Aggregation Pipelines** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (`getChatAnalyticsPipeline` using `$match`, `$group`, `$project`, `$sort`), `GET /api/chats/:chatId/analytics` |
 | **ACID Transactions** | SQL (PostgreSQL) | `api/src/services/chat.service.ts` (`deleteChat` using `prisma.$transaction`) |
-| **Input Sanitization & Injection Defense** | Security & Auth | `api/src/middleware/sanitization.ts` (`sanitizeHtml`, `sanitizePrompt`), `api/src/routes/chat.routes.ts` |
 | **Caching with Redis** | System & Integration | `api/src/db/cache.ts` (`RedisCacheManager` with `ioredis` and TTL expiration) |
 | **Scheduled Jobs / Cron** | System & Integration | `api/src/jobs/cron.ts` (`setupScheduledJobs` with `node-cron`) |
 | **WebSocket Real-Time** | System & Integration | `api/src/server.ts` (`WebSocketServer` on path `/ws` via `ws`) |
 | **Containerization** | Engineering Practices | `api/Dockerfile`, `web/Dockerfile`, `docker-compose.yml` |
-| **Function Calling / Tool Use** | AI App Engineering | `api/src/ai/tools.ts` (`availableTools`, `executeTool`) |
 | **Frontend Deployment** | Frontend | `web/vercel.json` (Next.js 15 on Vercel) |
-| **Backend Deployment** | Backend | `render.yaml` (Express.js on Render) |
 | **Secrets Management** | Engineering Practices | `api/src/config.ts`, `.env.example`, `api/.env.example` |
-| **JavaScript Event Loop & Hoisting** | Frontend | `web/components/ThinkingState.tsx` (`useSequence` closure, `setTimeout` macrotasks, function hoisting) |
 | **Server-Side Rendering (SSR)** | Frontend | `web/app/layout.tsx`, `web/app/page.tsx` (React Server Components) |

@@ -1,12 +1,25 @@
 /**
- * Input Sanitization & Prompt Injection Awareness and Defenses
+ * ─────────────────────────────────────────────────────────────
+ * CONCEPT: Prompt Injection Awareness & Defenses
+ * ─────────────────────────────────────────────────────────────
+ * WHAT THIS FILE IS FOR:
+ * Intercepts incoming user prompts and document text to detect and
+ * neutralize direct jailbreaks and indirect prompt injections
+ * before text reaches the LLM.
  *
- * Provides:
- * 1. XSS / HTML / Script injection sanitization
- * 2. Prompt injection pattern detection & delimiter escaping
+ * DEFENSE-IN-DEPTH LAYERS:
+ * 1. Heuristic Pattern Detection (`PROMPT_INJECTION_PATTERNS`):
+ *    Identifies known adversarial attacks ("ignore previous instructions",
+ *    "system override", "DAN mode").
+ * 2. Control Token Stripping (`SPECIAL_TOKENS`):
+ *    Removes ChatML and Llama control tokens (`<|im_start|>`, `### System:`)
+ *    preventing attackers from escaping role delimiters.
+ * 3. ASCII Sanitization:
+ *    Removes non-printable control characters that could bypass regex filters.
+ * ─────────────────────────────────────────────────────────────
  */
 
-// Known adversarial prompt injection attack signatures
+// Layer 1: Adversarial Prompt Injection Signatures
 const PROMPT_INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior)\s+(instructions|directives|prompts)/i,
   /system\s+override/i,
@@ -16,7 +29,7 @@ const PROMPT_INJECTION_PATTERNS = [
   /disregard\s+(the\s+)?rules\s+above/i,
 ];
 
-// Dangerous control characters and prompt delimiter escapes
+// Layer 2: Model Delimiter Tokens (prevents role spoofing in ChatML/Instruct models)
 const SPECIAL_TOKENS = [
   "<|im_start|>",
   "<|im_end|>",
@@ -43,7 +56,8 @@ export function sanitizeHtml(input: string): string {
 }
 
 /**
- * Sanitizes and neutralizes Prompt Injection attacks for LLM safety
+ * Prompt Injection Sanitization Pipeline:
+ * Returns sanitized string and injection telemetry flags.
  */
 export function sanitizePrompt(prompt: string): {
   sanitized: string;
@@ -56,14 +70,14 @@ export function sanitizePrompt(prompt: string): {
 
   const detectedPatterns: string[] = [];
 
-  // Check against prompt injection signatures
+  // Step 1: Scan for jailbreak signatures
   for (const pattern of PROMPT_INJECTION_PATTERNS) {
     if (pattern.test(prompt)) {
       detectedPatterns.push(pattern.source);
     }
   }
 
-  // Neutralize special prompt delimiters
+  // Step 2: Strip special delimiter tokens
   let sanitized = prompt;
   for (const token of SPECIAL_TOKENS) {
     if (sanitized.includes(token)) {
@@ -72,7 +86,7 @@ export function sanitizePrompt(prompt: string): {
     }
   }
 
-  // Trim and strip non-printable ASCII control characters (except newline and tab)
+  // Step 3: Strip non-printable ASCII control characters (excluding newline and tab)
   sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "").trim();
 
   return {

@@ -73,15 +73,15 @@ web/
 
 ## 5. Core Frontend JavaScript & Rendering Concepts
 
-### 5.1 JavaScript — Event Loop & Closures
-Implemented in `web/components/ThinkingState.tsx`:
-- `useSequence` hook leverages the JavaScript event loop macrotask queue via `setTimeout`.
-- Timers execute asynchronously after the synchronous call stack and microtask queues resolve.
-- Forms closures over state variables (`stage`), referencing the latest stage progression across re-renders.
+### 5.1 JavaScript — Event loop
+Implemented in `web/components/ThinkingState.tsx` and `api/src/services/auth.service.ts`:
+- Frontend: `useSequence` hook leverages the JavaScript event loop macrotask queue via `setTimeout`. Timers execute asynchronously after the synchronous call stack and microtask queues resolve, forming closures over `setStage`.
+- Backend: Synchronous validation executes on the Call Stack. Network socket I/O (Postgres queries) and CPU-heavy hashing (bcrypt 12 rounds) are delegated to Libuv and worker threads, resolving via the Microtask Queue.
 
 ### 5.2 JavaScript — Hoisting
-Implemented in `web/components/ThinkingState.tsx`:
-- Function declarations (e.g. `useSequence`) are hoisted with their definitions to the top of module scope during JavaScript compilation phase, enabling invocation throughout the component lifecycle.
+Implemented in `web/components/ThinkingState.tsx` and `api/src/services/auth.service.ts`:
+- Function declarations (e.g. `function useSequence`) are hoisted with their definitions to the top of module scope during compilation, enabling invocation anywhere in the file.
+- Block-scoped declarations (`const STAGES` in `ThinkingState.tsx` and `let user` in `auth.service.ts`) reside in the Temporal Dead Zone (TDZ) from the start of the block until declaration evaluation, preventing runtime access prior to initialization.
 
 ### 5.3 Server-Side Rendering (SSR)
 Implemented in `web/app/layout.tsx` and `web/app/page.tsx`:

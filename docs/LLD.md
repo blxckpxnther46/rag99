@@ -372,6 +372,13 @@ export async function deleteChat(userId: string, id: string) {
 - **File:** `api/src/ai/tools.ts`
 - Declares `ToolDefinition` schemas for `query_document_chunks` and `calculate_reading_time` with JSON parameter validation.
 
-### 7.9 JavaScript Event Loop, Hoisting & SSR
-- **Event Loop & Hoisting:** `web/components/ThinkingState.tsx` documents macrotask queue scheduling via `setTimeout` and compilation phase function hoisting.
+### 7.9 JavaScript — Event loop
+- **File:** `api/src/services/auth.service.ts` & `web/components/ThinkingState.tsx`
+- **Mechanics:** Call Stack synchronous execution (Zod parsing, JWT signing), Libuv thread pool offloading (`bcrypt.hash` 12 rounds), non-blocking network socket I/O (`prisma.user.create`), and Microtask Queue Promise resolution before Macrotask timers (`setTimeout`).
+
+### 7.10 JavaScript — Hoisting
+- **File:** `web/components/ThinkingState.tsx` & `api/src/services/auth.service.ts`
+- **Mechanics:** Module-level `const STAGES` resides in the Temporal Dead Zone (TDZ) until evaluated, throwing a `ReferenceError` if accessed early; function declaration `function useSequence` is fully hoisted with its definition during the creation phase; backend `let user` demonstrates block-scoping over legacy `var`.
+
+### 7.11 Server-Side Rendering (SSR)
 - **Server-Side Rendering:** `web/app/layout.tsx` and `web/app/page.tsx` are React Server Components executing on the server during SSR.

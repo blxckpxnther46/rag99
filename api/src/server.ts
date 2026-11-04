@@ -43,6 +43,17 @@ wss.on("connection", (ws: WebSocket) => {
   });
 });
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * BACKEND DEPLOYMENT & PORT BINDING:
+ * - Binds the HTTP and WebSocket servers to env.PORT.
+ * - In local development: defaults to 4000.
+ * - In Render deployment: Render dynamically injects process.env.PORT,
+ *   which envSchema (zod) coerces into env.PORT.
+ * - Render's public router maps external traffic (port 443 HTTPS)
+ *   to this bound port.
+ * ─────────────────────────────────────────────────────────────
+ */
 server.listen(env.PORT, () => {
   console.log(`rag99 api listening on http://localhost:${env.PORT}`);
 });

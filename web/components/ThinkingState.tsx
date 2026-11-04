@@ -1,5 +1,20 @@
 "use client";
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * CONCEPTS IMPLEMENTED IN THIS FILE:
+ * @concept JavaScript — Hoisting (Compilation vs Execution phase, TDZ on const STAGES)
+ * @concept Multi-step Agent (Sequential UI state trace & milestone progression)
+ * @concept JavaScript — Event Loop (Macrotask scheduling via setTimeout)
+ * @concept JavaScript — Closures (Captured setStage in timer callback)
+ * ─────────────────────────────────────────────────────────────
+ * WHAT THIS FILE IS FOR:
+ * Displays an animated, expandable multi-step thinking indicator
+ * while the backend RAG pipeline processes vectorization, retrieval,
+ * and LLM synthesis.
+ * ─────────────────────────────────────────────────────────────
+ */
+
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /* ─────────────────────────────────────────────────────────
@@ -7,23 +22,45 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
  * Fully customized for rag99 RAG execution steps
  * ───────────────────────────────────────────────────────── */
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * @concept JavaScript — Hoisting & Temporal Dead Zone (TDZ)
+ * ─────────────────────────────────────────────────────────────
+ * Scoping and Declaration Mechanics:
+ * 1. `var`:
+ *    - Hoisted to top of function/global scope during compilation/creation phase.
+ *    - Initialized automatically with `undefined`.
+ *    - If accessed before declaration, it yields `undefined` without throwing an error.
+ * 2. `let` and `const`:
+ *    - Hoisted to top of enclosing block during compilation phase.
+ *    - NOT initialized with any default value.
+ *    - The variable remains in the "Temporal Dead Zone" (TDZ) from the beginning
+ *      of the block until the evaluation of the declaration line.
+ *    - If accessed before initialization, JavaScript engine throws:
+ *      `ReferenceError: Cannot access 'STAGES' before initialization`.
+ * 3. Function Declarations:
+ *    - `function useSequence(...)`: Hoisted completely with its implementation body,
+ *      so it can be invoked anywhere in the enclosing scope.
+ */
+// 'const STAGES' is block-scoped in module and resides in TDZ until this line runs.
 const STAGES = [800, 800, 1500, 1000, 1000];
 
 /**
- * JavaScript — Hoisting:
- * Function declaration `useSequence` is hoisted to the top of its lexical scope during compilation phase.
+ * JavaScript — Function Hoisting:
+ * Function declaration `useSequence` is hoisted to the top of its scope during compilation phase.
  *
- * JavaScript — Event loop:
- * Leverages the JavaScript Event Loop macrotask queue via `setTimeout`.
- * The timer callback runs asynchronously after the call stack and microtask queue clear,
- * maintaining a closure over the latest `stage` state variable across render cycles.
+ * JavaScript — Event loop & Closures:
+ * - Event Loop: `setTimeout` schedules state updates on the Macrotask queue.
+ * - Closures: The callback `() => setStage((s) => s + 1)` forms a closure over `setStage`.
+ *   Using the updater function `(s) => s + 1` accesses the latest state without stale closure traps.
  */
 function useSequence(steps: number[]) {
   const [stage, setStage] = useState(0);
   useEffect(() => {
     if (stage >= steps.length - 1) return;
-    // JavaScript — Event loop: Defer execution to the macrotask queue
+    // Macrotask queue: schedules next step timer
     const t = setTimeout(() => setStage((s) => s + 1), steps[stage]);
+    // Effect cleanup: cancels pending timer if component unmounts or deps change
     return () => clearTimeout(t);
   }, [stage, steps]);
   return stage;
@@ -35,6 +72,29 @@ type Row = {
   mono?: boolean;
 };
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * @concept Multi-step Agent vs Sequential UI State & Injection Defense
+ * ─────────────────────────────────────────────────────────────
+ * 1. Front-end Immutability:
+ *    - `VARIANTS.Steps.rows` is a static, immutable TypeScript object compiled
+ *      into the client-side JavaScript bundle on Vercel.
+ *    - An external attacker cannot tamper with this client-side step progression
+ *      because it does not accept external network input.
+ * 2. Backend Security & False Evidence Ingestion:
+ *    - Real multi-step agent flow happens on the backend:
+ *      Step 1: Embedding generation via client pool.
+ *      Step 2: Vector retrieval using pgvector cosine distance `<=>`.
+ *      Step 3: Prompt assembly with sanitized inputs and isolated delimiters.
+ *      Step 4: LLM synthesis with JSON response parsing.
+ *    - In Step 3 ("Retrieving semantic evidence"): An attacker attempting to inject
+ *      malicious instructions via an uploaded document (Indirect Prompt Injection)
+ *      is neutralized because:
+ *      a) Document chunks are wrapped in rigid delimiters (`Evidence: [1] file, chunk N: ...`).
+ *      b) System instructions explicitly forbid executing code or following commands inside chunks.
+ *      c) User input is passed through `sanitizePrompt()` in `sanitization.ts`.
+ * ─────────────────────────────────────────────────────────────
+ */
 const VARIANTS: Record<
   string,
   { active: string; done: string; rows: Row[] }

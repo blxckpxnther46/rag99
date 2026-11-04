@@ -1,3 +1,11 @@
+/**
+ * ─────────────────────────────────────────────────────────────
+ * CONCEPTS IMPLEMENTED IN THIS FILE:
+ * @concept MongoDB CRUD Operations (Update ratings, Delete chat telemetry, Aggregate retrieval)
+ * @concept Polyglot Persistence Architecture (Postgres for documents/vectors vs Mongo for telemetry)
+ * @concept Prompt Injection Awareness & Defenses (sanitizePrompt input inspection)
+ * ─────────────────────────────────────────────────────────────
+ */
 import { Router } from "express";
 import { asyncHandler } from "../http/async-handler.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -38,17 +46,37 @@ router.patch("/:chatId", asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * Polyglot Persistence & MongoDB CRUD (DELETE)
+ * ─────────────────────────────────────────────────────────────
+ * 1. PostgreSQL handles transactional cascade deletion of relational
+ *    records: DocumentChunks, Documents, Messages, and Chat.
+ * 2. MongoDB CRUD DELETE: `deleteMany({ chatId })` purges non-relational
+ *    telemetry, evaluation logs, and embedded citations for that chat.
+ * ─────────────────────────────────────────────────────────────
+ */
 router.delete("/:chatId", asyncHandler(async (req, res) => {
   const { chatId } = chatParamsSchema.parse(req.params);
+  // Relational deletion in PostgreSQL
   await chats.deleteChat(req.user!.id, chatId);
-  // Polyglot persistence: clean up corresponding MongoDB chat analytics
+  // MongoDB CRUD: DELETE operation on NoSQL telemetry collection
   MongoChatMessage.deleteMany({ chatId }).catch(() => {});
   res.status(204).send();
 }));
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * MongoDB CRUD (RETRIEVE via Aggregation Pipeline)
+ * ─────────────────────────────────────────────────────────────
+ * Reads and computes statistics ($match, $group, $project, $sort)
+ * across stored conversation turns and LLM evaluation telemetry.
+ * ─────────────────────────────────────────────────────────────
+ */
 router.get("/:chatId/analytics", asyncHandler(async (req, res) => {
   const { chatId } = chatParamsSchema.parse(req.params);
   await chats.ownedChat(req.user!.id, chatId);
+  // MongoDB CRUD: Complex RETRIEVE pipeline
   const stats = await getChatAnalyticsPipeline(chatId);
   res.json(stats);
 }));
@@ -59,22 +87,42 @@ router.get("/:chatId/messages", asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * Prompt Injection Awareness & Defenses
+ * ─────────────────────────────────────────────────────────────
+ * Incoming content is passed through `sanitizePrompt` before hitting
+ * the vector retrieval or LLM synthesis pipelines.
+ * ─────────────────────────────────────────────────────────────
+ */
 router.post("/:chatId/messages", asyncHandler(async (req, res) => {
   const { chatId } = chatParamsSchema.parse(req.params);
   const { content, mode } = messageSchema.parse(req.body);
-  // Input sanitization & injection awareness defenses
+  
+  // Prompt Injection Awareness: regex signature detection & token strip
   const { sanitized, hasInjectionRisk } = sanitizePrompt(content);
-  if (hasInjectionRisk) { console.warn("[Security] Potential prompt injection detected:", chatId); }
+  if (hasInjectionRisk) {
+    console.warn("[Security] Potential prompt injection detected in chat:", chatId);
+  }
+  
   const result = await messages.ask(req.user!.id, chatId, sanitized, mode);
   res.status(201).json(result);
 }));
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * MongoDB CRUD (UPDATE)
+ * ─────────────────────────────────────────────────────────────
+ * - Executes `updateOne` using `$set: { rating }` by messageId or _id.
+ * - Modifies user feedback ("up" or "down") without rewriting the document.
+ * ─────────────────────────────────────────────────────────────
+ */
 router.patch("/:chatId/messages/:messageId/rating", asyncHandler(async (req, res) => {
   const { chatId, messageId } = req.params;
   const { rating } = req.body;
   console.log(`[Rating Update] Received rating "${rating}" for message ${messageId} in chat ${chatId}`);
 
-  // Update user feedback rating in MongoDB by matching messageId or _id, or latest message in chat if temporary ID
+  // MongoDB CRUD: UPDATE operation on ChatMessage document
   let updateRes = await MongoChatMessage.updateOne(
     { $or: [{ messageId }, { _id: messageId }] },
     { $set: { rating: rating || "" } }
@@ -83,7 +131,7 @@ router.patch("/:chatId/messages/:messageId/rating", asyncHandler(async (req, res
     return null;
   });
 
-  // Fallback: If the messageId sent by the client was not yet assigned or differs, update the latest ASSISTANT message in this chat
+  // Fallback: If client messageId differs, update the latest ASSISTANT message in this chat
   if (!updateRes || updateRes.matchedCount === 0) {
     const latestAssistant = await MongoChatMessage.findOne({ chatId, role: "ASSISTANT" }).sort({ createdAt: -1 });
     if (latestAssistant) {
@@ -119,6 +167,15 @@ router.get("/:chatId/documents", asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+/**
+ * ─────────────────────────────────────────────────────────────
+ * Document Upload Storage (PostgreSQL vs MongoDB)
+ * ─────────────────────────────────────────────────────────────
+ * - Uploads are processed into PostgreSQL (`Document` and `DocumentChunk`),
+ *   NOT MongoDB. Binary files are stored in Cloudinary / cloud storage.
+ * - Chunks are vectorized and indexed with PostgreSQL pgvector.
+ * ─────────────────────────────────────────────────────────────
+ */
 router.post(
   "/:chatId/documents",
   upload.single("file"),
@@ -129,6 +186,7 @@ router.post(
       throw new AppError(400, "One supported file is required");
     }
 
+    // Stores document records & triggers vector chunking in PostgreSQL
     const result = await documents.addDocument(req.user!.id, chatId, req.file);
     res.status(201).json(result);
   }),

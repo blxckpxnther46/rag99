@@ -228,3 +228,11 @@ graph LR
 ### 10.9 Function Calling / Tool Use
 - **File:** `api/src/ai/tools.ts`
 - **Implementation:** Declares structured tool schemas (`query_document_chunks`, `calculate_reading_time`) and dynamic execution dispatch for AI agent integrations.
+
+### 10.10 JavaScript — Event loop
+- **Files:** `api/src/services/auth.service.ts`, `api/src/routes/auth.routes.ts`, `web/components/ThinkingState.tsx`
+- **Implementation:** The single-threaded V8 engine handles synchronous checks and JWT signing on the Call Stack. Heavy I/O (PostgreSQL TCP queries via Prisma) and CPU-bound operations (`bcrypt.hash` 12 salt rounds) are offloaded to Libuv and its worker thread pool, resolving asynchronously via the Microtask Queue before Macrotask timers (`setTimeout`).
+
+### 10.11 JavaScript — Hoisting
+- **Files:** `web/components/ThinkingState.tsx`, `api/src/services/auth.service.ts`
+- **Implementation:** Contrasts compilation phase declarations. `const STAGES` is placed in the Temporal Dead Zone (TDZ), throwing a `ReferenceError` if accessed prematurely, while `function useSequence` is hoisted with its definition. In the backend, block-scoped `let user` avoids the scope leakage and variable shadowing vulnerabilities of legacy `var`.
