@@ -1,6 +1,6 @@
 /**
  * ─────────────────────────────────────────────────────────────
- * Server-Side Rendering (SSR)
+ * @concept Server-side rendering
  * ─────────────────────────────────────────────────────────────
  * RootLayout is a React Server Component (RSC) rendered server-side
  * on incoming requests to stream the initial HTML shell.

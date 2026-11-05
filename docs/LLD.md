@@ -380,5 +380,12 @@ export async function deleteChat(userId: string, id: string) {
 - **File:** `web/components/ThinkingState.tsx` & `api/src/services/auth.service.ts`
 - **Mechanics:** Module-level `const STAGES` resides in the Temporal Dead Zone (TDZ) until evaluated, throwing a `ReferenceError` if accessed early; function declaration `function useSequence` is fully hoisted with its definition during the creation phase; backend `let user` demonstrates block-scoping over legacy `var`.
 
-### 7.11 Server-Side Rendering (SSR)
-- **Server-Side Rendering:** `web/app/layout.tsx` and `web/app/page.tsx` are React Server Components executing on the server during SSR.
+### 7.11 Server-side rendering
+- **Category:** System & Integration
+- **Files:** `web/app/layout.tsx`, `web/app/page.tsx`
+- **Mechanics:** React Server Components (RSC) rendered dynamically on-demand on the server (`force-dynamic`). Delivers pre-rendered HTML on incoming requests.
+
+### 7.12 Environment variables & secrets management
+- **Category:** Engineering Practices
+- **Files:** `api/src/config.ts`, `api/.env.example`, `.env.example`
+- **Mechanics:** Boot-time schema validation with Zod (`envSchema`). Guarantees fail-fast crash if required database URLs or secrets (`JWT_SECRET` >= 32 chars) are missing or insecure, preventing secret leakage or runtime misconfiguration.

@@ -236,3 +236,13 @@ graph LR
 ### 10.11 JavaScript — Hoisting
 - **Files:** `web/components/ThinkingState.tsx`, `api/src/services/auth.service.ts`
 - **Implementation:** Contrasts compilation phase declarations. `const STAGES` is placed in the Temporal Dead Zone (TDZ), throwing a `ReferenceError` if accessed prematurely, while `function useSequence` is hoisted with its definition. In the backend, block-scoped `let user` avoids the scope leakage and variable shadowing vulnerabilities of legacy `var`.
+
+### 10.12 Server-side rendering
+- **Category:** System & Integration
+- **Files:** `web/app/layout.tsx`, `web/app/page.tsx`
+- **Implementation:** Next.js React Server Components (RSC) rendered dynamically on the server for each incoming HTTP request (`force-dynamic`). Delivers the full HTML document directly to the client for immediate SEO, fast First Contentful Paint (FCP), and zero initial client-side bundle execution.
+
+### 10.13 Environment variables & secrets management
+- **Category:** Engineering Practices
+- **Files:** `api/src/config.ts`, `api/.env.example`, `.env.example`
+- **Implementation:** Enforces boot-time schema validation with Zod (`envSchema`). Guarantees fail-fast crash if required database URLs or secrets (`JWT_SECRET` >= 32 chars) are missing or insecure, preventing secret leakage or runtime misconfiguration.

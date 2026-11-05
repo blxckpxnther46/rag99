@@ -4,9 +4,9 @@
  * ─────────────────────────────────────────────────────────────
  * CONCEPTS IMPLEMENTED IN THIS FILE:
  * @concept JavaScript — Hoisting (Compilation vs Execution phase, TDZ on const STAGES)
- * @concept Multi-step Agent (Sequential UI state trace & milestone progression)
- * @concept JavaScript — Event Loop (Macrotask scheduling via setTimeout)
+ * @concept JavaScript — Event loop (Frontend timer macrotask scheduling via setTimeout)
  * @concept JavaScript — Closures (Captured setStage in timer callback)
+ * @concept Multi-step Agent (Sequential UI state trace & milestone progression)
  * ─────────────────────────────────────────────────────────────
  * WHAT THIS FILE IS FOR:
  * Displays an animated, expandable multi-step thinking indicator
@@ -46,13 +46,18 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 const STAGES = [800, 800, 1500, 1000, 1000];
 
 /**
- * JavaScript — Function Hoisting:
- * Function declaration `useSequence` is hoisted to the top of its scope during compilation phase.
- *
- * JavaScript — Event loop & Closures:
- * - Event Loop: `setTimeout` schedules state updates on the Macrotask queue.
- * - Closures: The callback `() => setStage((s) => s + 1)` forms a closure over `setStage`.
- *   Using the updater function `(s) => s + 1` accesses the latest state without stale closure traps.
+ * ─────────────────────────────────────────────────────────────
+ * @concept JavaScript — Event loop
+ * @concept JavaScript — Closures
+ * ─────────────────────────────────────────────────────────────
+ * Frontend Event Loop & Macrotask Scheduling:
+ * - Function declaration `useSequence` is hoisted to the top of its lexical scope.
+ * - `setTimeout` registers state transitions on the browser's Macrotask Queue.
+ * - The callback `() => setStage((s) => s + 1)` executes asynchronously after
+ *   the synchronous Call Stack empties and any pending Microtask queue items resolve.
+ * - Closures: The timer callback retains a live closure over `setStage`, and the
+ *   functional state updater `(s) => s + 1` accesses the latest stage without stale closure bugs.
+ * ─────────────────────────────────────────────────────────────
  */
 function useSequence(steps: number[]) {
   const [stage, setStage] = useState(0);

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 /**
  * ─────────────────────────────────────────────────────────────
- * Environment Variables & Secrets Management
+ * @concept Environment variables & secrets management
  * ─────────────────────────────────────────────────────────────
  * Enforces strict schema validation for environment configurations
  * and runtime secrets at boot time using Zod:
@@ -11,6 +11,7 @@ import { z } from "zod";
  *   are missing or do not meet minimum entropy requirements (>= 32 chars).
  * - Centralizes typed access across the application.
  * - Protects secrets from exposure to client bundles.
+ * ─────────────────────────────────────────────────────────────
  */
 
 const envSchema = z.object({

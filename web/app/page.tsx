@@ -1,10 +1,13 @@
 /**
  * ─────────────────────────────────────────────────────────────
- * Server-Side Rendering (SSR)
+ * @concept Server-side rendering
  * ─────────────────────────────────────────────────────────────
- * Next.js Server Component executing server-side redirects
- * during SSR request handling.
+ * Next.js React Server Component (RSC) executing on-demand
+ * server-side rendering (SSR) on incoming requests.
+ * ─────────────────────────────────────────────────────────────
  */
+
+export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
 

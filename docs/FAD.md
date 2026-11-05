@@ -83,9 +83,9 @@ Implemented in `web/components/ThinkingState.tsx` and `api/src/services/auth.ser
 - Function declarations (e.g. `function useSequence`) are hoisted with their definitions to the top of module scope during compilation, enabling invocation anywhere in the file.
 - Block-scoped declarations (`const STAGES` in `ThinkingState.tsx` and `let user` in `auth.service.ts`) reside in the Temporal Dead Zone (TDZ) from the start of the block until declaration evaluation, preventing runtime access prior to initialization.
 
-### 5.3 Server-Side Rendering (SSR)
+### 5.3 Server-side rendering
 Implemented in `web/app/layout.tsx` and `web/app/page.tsx`:
-- Next.js React Server Components (RSC) execute server-side on every request to generate and stream the initial HTML shell.
+- Next.js React Server Components (RSC) execute server-side on every request (`force-dynamic`) to generate and stream the initial HTML shell.
 
 ### 5.4 Containerization with Docker
 - `web/Dockerfile`: Multi-stage Next.js production build container.
