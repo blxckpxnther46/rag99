@@ -3,7 +3,21 @@ api/node_modules
 web/node_modules
 api/dist
 web/.next
+
+# Environment variables & secrets management: ignore sensitive environment files
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
 api/.env
+api/.env.*
+web/.env
 web/.env.local
+web/.env.*
+
+# Retain example configuration templates in version control
+!.env.example
+!api/.env.example
+!web/.env.example

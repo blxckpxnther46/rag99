@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import { z } from "zod";
 
 /**
@@ -7,6 +7,7 @@ import { z } from "zod";
  * ─────────────────────────────────────────────────────────────
  * Enforces strict schema validation for environment configurations
  * and runtime secrets at boot time using Zod:
+ * - Bootstraps runtime environment via `dotenv.config()`.
  * - Guarantees fail-fast behavior if secrets (JWT_SECRET, DATABASE_URL)
  *   are missing or do not meet minimum entropy requirements (>= 32 chars).
  * - Centralizes typed access across the application.
@@ -14,7 +15,10 @@ import { z } from "zod";
  * ─────────────────────────────────────────────────────────────
  */
 
-const envSchema = z.object({
+// Initialize dotenv environment configuration
+dotenv.config();
+
+export const envSchema = z.object({
   // Database Secrets
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   
@@ -39,7 +43,8 @@ const envSchema = z.object({
   CLOUDINARY_API_KEY: z.string().min(1, "CLOUDINARY_API_KEY is required"),
   CLOUDINARY_API_SECRET: z.string().min(1, "CLOUDINARY_API_SECRET is required"),
   
-  // Polyglot NoSQL Connection Secret
+  // Distributed Cache & Polyglot NoSQL Connection Secrets
+  REDIS_URL: z.string().min(1).optional(),
   MONGODB_URI: z.string().min(1).optional(),
   
   // Server Configuration
@@ -48,7 +53,22 @@ const envSchema = z.object({
   MAX_UPLOAD_MB: z.coerce.number().positive().default(10),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().positive().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().positive().default(60),
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
+
+export type Env = z.infer<typeof envSchema>;
+
+/**
+ * Validates and sanitizes loaded environment secrets
+ */
+export function validateSecrets(): { valid: boolean; loadedCount: number } {
+  const result = envSchema.safeParse(process.env);
+  if (!result.success) {
+    console.error("[Secrets] Validation failed:", result.error.format());
+    return { valid: false, loadedCount: 0 };
+  }
+  return { valid: true, loadedCount: Object.keys(result.data).length };
+}
 
 const env = envSchema.parse(process.env);
 

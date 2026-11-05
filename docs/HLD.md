@@ -230,19 +230,21 @@ graph LR
 - **Implementation:** Declares structured tool schemas (`query_document_chunks`, `calculate_reading_time`) and dynamic execution dispatch for AI agent integrations.
 
 ### 10.10 JavaScript — Event loop
-- **Files:** `api/src/services/auth.service.ts`, `api/src/routes/auth.routes.ts`, `web/components/ThinkingState.tsx`
-- **Implementation:** The single-threaded V8 engine handles synchronous checks and JWT signing on the Call Stack. Heavy I/O (PostgreSQL TCP queries via Prisma) and CPU-bound operations (`bcrypt.hash` 12 salt rounds) are offloaded to Libuv and its worker thread pool, resolving asynchronously via the Microtask Queue before Macrotask timers (`setTimeout`).
+- **Category:** Frontend
+- **Files:** `web/components/ThinkingState.tsx`, `web/components/EventLoopStatus.tsx`, `web/lib/event-loop.ts`, `api/src/services/auth.service.ts`
+- **Implementation:** Demonstrates Call Stack (synchronous execution), Microtask Queue (`queueMicrotask` and `Promise.resolve().then(...)`), and Macrotask Queue (`setTimeout` timers) execution mechanics across frontend UI pipelines and backend authentication flows.
 
 ### 10.11 JavaScript — Hoisting
+- **Category:** Frontend
 - **Files:** `web/components/ThinkingState.tsx`, `api/src/services/auth.service.ts`
 - **Implementation:** Contrasts compilation phase declarations. `const STAGES` is placed in the Temporal Dead Zone (TDZ), throwing a `ReferenceError` if accessed prematurely, while `function useSequence` is hoisted with its definition. In the backend, block-scoped `let user` avoids the scope leakage and variable shadowing vulnerabilities of legacy `var`.
 
 ### 10.12 Server-side rendering
 - **Category:** System & Integration
-- **Files:** `web/app/layout.tsx`, `web/app/page.tsx`
-- **Implementation:** Next.js React Server Components (RSC) rendered dynamically on the server for each incoming HTTP request (`force-dynamic`). Delivers the full HTML document directly to the client for immediate SEO, fast First Contentful Paint (FCP), and zero initial client-side bundle execution.
+- **Files:** `web/pages/status.tsx`, `web/app/page.tsx`, `web/app/ssr/page.tsx`, `api/src/routes/ssr.routes.ts`
+- **Implementation:** Dynamic Server-Side Rendering (SSR) via classic Pages Router `getServerSideProps` and App Router on-demand dynamic React Server Components (`force-dynamic`). Delivers pre-rendered HTML integrating server-side headers, environment secrets, and backend API status.
 
 ### 10.13 Environment variables & secrets management
 - **Category:** Engineering Practices
-- **Files:** `api/src/config.ts`, `api/.env.example`, `.env.example`
-- **Implementation:** Enforces boot-time schema validation with Zod (`envSchema`). Guarantees fail-fast crash if required database URLs or secrets (`JWT_SECRET` >= 32 chars) are missing or insecure, preventing secret leakage or runtime misconfiguration.
+- **Files:** `api/.env.example`, `.env.example`, `api/src/config.ts`, `api/src/self-check.ts`, `.gitignore`
+- **Implementation:** Strict boot-time schema validation with Zod (`envSchema`) initialized via `dotenv.config()`. Includes `validateSecrets()` pre-flight assertions and comprehensive `.gitignore` rules preventing credential exposure.

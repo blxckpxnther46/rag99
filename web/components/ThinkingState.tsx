@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import EventLoopStatus from "./EventLoopStatus";
 
 /* ─────────────────────────────────────────────────────────
  * THINKING STATE — expandable agent trace from beautifului.dev
@@ -48,13 +49,47 @@ const STAGES = [800, 800, 1500, 1000, 1000];
 /**
  * ─────────────────────────────────────────────────────────────
  * @concept JavaScript — Event loop
+ * ─────────────────────────────────────────────────────────────
+ * Frontend JavaScript Event Loop Execution:
+ * Orchestrates synchronous Call Stack execution, high-priority
+ * Microtask Queue processing, and Macrotask (Task Queue) timers:
+ * 1. Call Stack: Synchronous stage validation and state assertion.
+ * 2. Microtask Queue: `queueMicrotask` and `Promise.resolve().then(...)`
+ *    execute immediately when the Call Stack empties, prior to paint.
+ * 3. Macrotask Queue: `setTimeout` pushes timer callbacks to the Task Queue,
+ *    processed on subsequent turns of the browser event loop.
+ * ─────────────────────────────────────────────────────────────
+ */
+export function scheduleEventLoopStage(
+  onMicrotask: () => void,
+  onMacrotask: () => void,
+  delayMs: number
+): () => void {
+  // Step 1: Call Stack — synchronous execution
+  let active = true;
+
+  // Step 2: Microtask Queue — executes before browser paint
+  queueMicrotask(() => {
+    if (active) onMicrotask();
+  });
+
+  // Step 3: Macrotask Queue — schedules timer on Task Queue
+  const timer = setTimeout(() => {
+    if (active) onMacrotask();
+  }, delayMs);
+
+  return () => {
+    active = false;
+    clearTimeout(timer);
+  };
+}
+
+/**
+ * ─────────────────────────────────────────────────────────────
  * @concept JavaScript — Closures
  * ─────────────────────────────────────────────────────────────
- * Frontend Event Loop & Macrotask Scheduling:
- * - Function declaration `useSequence` is hoisted to the top of its lexical scope.
- * - `setTimeout` registers state transitions on the browser's Macrotask Queue.
- * - The callback `() => setStage((s) => s + 1)` executes asynchronously after
- *   the synchronous Call Stack empties and any pending Microtask queue items resolve.
+ * Scoping & Closure Encapsulation:
+ * - Function declaration `useSequence` is hoisted to the top of its scope.
  * - Closures: The timer callback retains a live closure over `setStage`, and the
  *   functional state updater `(s) => s + 1` accesses the latest stage without stale closure bugs.
  * ─────────────────────────────────────────────────────────────
@@ -226,6 +261,9 @@ export default function ThinkingState({ onSettled }: { onSettled?: () => void })
           </div>
         </div>
       )}
+
+      {/* JavaScript — Event loop frontend status monitor */}
+      <EventLoopStatus />
     </div>
   );
 }

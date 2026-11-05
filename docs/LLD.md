@@ -373,19 +373,21 @@ export async function deleteChat(userId: string, id: string) {
 - Declares `ToolDefinition` schemas for `query_document_chunks` and `calculate_reading_time` with JSON parameter validation.
 
 ### 7.9 JavaScript — Event loop
-- **File:** `api/src/services/auth.service.ts` & `web/components/ThinkingState.tsx`
-- **Mechanics:** Call Stack synchronous execution (Zod parsing, JWT signing), Libuv thread pool offloading (`bcrypt.hash` 12 rounds), non-blocking network socket I/O (`prisma.user.create`), and Microtask Queue Promise resolution before Macrotask timers (`setTimeout`).
+- **Category:** Frontend
+- **Files:** `web/components/ThinkingState.tsx`, `web/components/EventLoopStatus.tsx`, `web/lib/event-loop.ts`, `api/src/services/auth.service.ts`
+- **Mechanics:** Demonstrates Call Stack (synchronous execution), Microtask Queue (`queueMicrotask` and `Promise.resolve().then(...)`), and Macrotask Queue (`setTimeout` timers) execution mechanics across frontend UI pipelines and backend authentication flows.
 
 ### 7.10 JavaScript — Hoisting
-- **File:** `web/components/ThinkingState.tsx` & `api/src/services/auth.service.ts`
+- **Category:** Frontend
+- **Files:** `web/components/ThinkingState.tsx` & `api/src/services/auth.service.ts`
 - **Mechanics:** Module-level `const STAGES` resides in the Temporal Dead Zone (TDZ) until evaluated, throwing a `ReferenceError` if accessed early; function declaration `function useSequence` is fully hoisted with its definition during the creation phase; backend `let user` demonstrates block-scoping over legacy `var`.
 
 ### 7.11 Server-side rendering
 - **Category:** System & Integration
-- **Files:** `web/app/layout.tsx`, `web/app/page.tsx`
-- **Mechanics:** React Server Components (RSC) rendered dynamically on-demand on the server (`force-dynamic`). Delivers pre-rendered HTML on incoming requests.
+- **Files:** `web/pages/status.tsx`, `web/app/page.tsx`, `web/app/ssr/page.tsx`, `api/src/routes/ssr.routes.ts`
+- **Mechanics:** Dynamic Server-Side Rendering (SSR) via classic Pages Router `getServerSideProps` and App Router on-demand dynamic React Server Components (`force-dynamic`). Delivers pre-rendered HTML integrating server-side headers, environment secrets, and backend API status.
 
 ### 7.12 Environment variables & secrets management
 - **Category:** Engineering Practices
-- **Files:** `api/src/config.ts`, `api/.env.example`, `.env.example`
-- **Mechanics:** Boot-time schema validation with Zod (`envSchema`). Guarantees fail-fast crash if required database URLs or secrets (`JWT_SECRET` >= 32 chars) are missing or insecure, preventing secret leakage or runtime misconfiguration.
+- **Files:** `api/.env.example`, `.env.example`, `api/src/config.ts`, `api/src/self-check.ts`, `.gitignore`
+- **Mechanics:** Strict boot-time schema validation with Zod (`envSchema`) initialized via `dotenv.config()`. Includes `validateSecrets()` pre-flight assertions and comprehensive `.gitignore` rules preventing credential exposure.

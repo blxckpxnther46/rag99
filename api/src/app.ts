@@ -6,6 +6,7 @@ import { errorHandler } from "./middleware/error.js";
 import auth from "./routes/auth.routes.js";
 import chats from "./routes/chat.routes.js";
 import documents from "./routes/document.routes.js";
+import ssr from "./routes/ssr.routes.js";
 
 export const app = express();
 
@@ -37,6 +38,9 @@ app.use(rateLimit);
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
+
+// Server-side rendering (SSR) endpoint
+app.use(ssr);
 
 app.use("/api/auth", auth);
 app.use("/api/chats", chats);

@@ -176,7 +176,7 @@ Detailed technical specifications and design documentation can be found in the `
 | Concept | Layer | Implementation Evidence |
 |---|---|---|
 | **JavaScript — Hoisting** | Frontend & Backend | `web/components/ThinkingState.tsx` (`const STAGES` in Temporal Dead Zone vs hoisted `function useSequence`), `api/src/services/auth.service.ts` (block-scoped `let user` vs `var`) |
-| **JavaScript — Event loop** | Frontend | `web/components/ThinkingState.tsx` (`useSequence` macrotask scheduling via `setTimeout`, Call Stack execution, and Microtask queue resolution) |
+| **JavaScript — Event loop** | Frontend | `web/components/ThinkingState.tsx`, `web/components/EventLoopStatus.tsx`, `web/lib/event-loop.ts` (Synchronous Call Stack execution, Microtask queue resolution via `queueMicrotask` & `Promise.then`, Macrotask timer scheduling via `setTimeout`) |
 | **MongoDB CRUD Operations** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (`logMongoMessage` for CREATE, `getChatAnalyticsPipeline` for RETRIEVE), `api/src/routes/chat.routes.ts` (`updateOne` rating for UPDATE, `deleteMany` for DELETE) |
 | **MongoDB Schema Modeling** | NoSQL (MongoDB) | `api/src/db/mongo.ts` (Embedding: `CitationSubSchema`, `RagTelemetrySubSchema`; Referencing: `ChatSessionMetaSchema.lastMessageRef` and `.populate()`) |
 | **Multi-step agent** | AI App Engineering | `web/components/ThinkingState.tsx` (`VARIANTS.Steps.rows` sequential UI milestone execution), `api/src/services/message.service.ts` (embedding -> retrieval -> prompt -> synthesis) |
@@ -193,5 +193,5 @@ Detailed technical specifications and design documentation can be found in the `
 | **WebSocket Real-Time** | System & Integration | `api/src/server.ts` (`WebSocketServer` on path `/ws` via `ws`) |
 | **Containerization** | Engineering Practices | `api/Dockerfile`, `web/Dockerfile`, `docker-compose.yml` |
 | **Frontend Deployment** | Frontend | `web/vercel.json` (Next.js 15 on Vercel) |
-| **Environment variables & secrets management** | Engineering Practices | `api/src/config.ts` (Zod `envSchema` fail-fast validation), `api/.env.example`, `.env.example` |
-| **Server-side rendering** | System & Integration | `web/app/layout.tsx`, `web/app/page.tsx` (React Server Components with `force-dynamic` on-demand SSR) |
+| **Environment variables & secrets management** | Engineering Practices | `api/.env.example`, `.env.example`, `api/src/config.ts` (`dotenv.config()`, Zod `envSchema` validation, `validateSecrets()`), `.gitignore` |
+| **Server-side rendering** | System & Integration | `web/pages/status.tsx` (`getServerSideProps`), `web/app/page.tsx` & `web/app/ssr/page.tsx` (dynamic React Server Components), `api/src/routes/ssr.routes.ts` (Express SSR endpoint) |

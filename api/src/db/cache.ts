@@ -1,4 +1,5 @@
 import { Redis } from "ioredis";
+import env from "../config.js";
 
 /**
  * ─────────────────────────────────────────────────────────────
@@ -13,8 +14,8 @@ import { Redis } from "ioredis";
 let redisClient: Redis | null = null;
 
 try {
-  if (process.env.REDIS_URL) {
-    redisClient = new Redis(process.env.REDIS_URL, {
+  if (env.REDIS_URL) {
+    redisClient = new Redis(env.REDIS_URL, {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
     });
@@ -28,11 +29,11 @@ export class RedisCacheManager {
   private inMemoryFallback = new Map<string, { value: string; expiresAt: number }>();
 
   async get(key: string): Promise<string | null> {
-    if (redisClient && redisClient.status === "ready") {
+    if (redisClient) {
       try {
         return await redisClient.get(key);
       } catch {
-        // Fail-safe fallback to in-memory store
+        // Fall back to memory
       }
     }
     const item = this.inMemoryFallback.get(key);
@@ -44,13 +45,13 @@ export class RedisCacheManager {
     return item.value;
   }
 
-  async set(key: string, value: string, ttlSeconds: number = 300): Promise<void> {
-    if (redisClient && redisClient.status === "ready") {
+  async set(key: string, value: string, ttlSeconds = 3600): Promise<void> {
+    if (redisClient) {
       try {
-        await redisClient.set(key, value, "EX", ttlSeconds);
+        await redisClient.setex(key, ttlSeconds, value);
         return;
       } catch {
-        // Fail-safe fallback to in-memory store
+        // Fall back to memory
       }
     }
     this.inMemoryFallback.set(key, {
@@ -60,10 +61,9 @@ export class RedisCacheManager {
   }
 
   async del(key: string): Promise<void> {
-    if (redisClient && redisClient.status === "ready") {
+    if (redisClient) {
       try {
         await redisClient.del(key);
-        return;
       } catch {}
     }
     this.inMemoryFallback.delete(key);

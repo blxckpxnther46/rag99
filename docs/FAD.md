@@ -74,8 +74,8 @@ web/
 ## 5. Core Frontend JavaScript & Rendering Concepts
 
 ### 5.1 JavaScript — Event loop
-Implemented in `web/components/ThinkingState.tsx` and `api/src/services/auth.service.ts`:
-- Frontend: `useSequence` hook leverages the JavaScript event loop macrotask queue via `setTimeout`. Timers execute asynchronously after the synchronous call stack and microtask queues resolve, forming closures over `setStage`.
+Implemented in `web/components/ThinkingState.tsx`, `web/components/EventLoopStatus.tsx`, and `web/lib/event-loop.ts`:
+- Frontend: Call Stack synchronous execution, Microtask Queue resolution via `queueMicrotask` and `Promise.resolve().then(...)`, and Macrotask Queue timer scheduling via `setTimeout`.
 - Backend: Synchronous validation executes on the Call Stack. Network socket I/O (Postgres queries) and CPU-heavy hashing (bcrypt 12 rounds) are delegated to Libuv and worker threads, resolving via the Microtask Queue.
 
 ### 5.2 JavaScript — Hoisting
@@ -84,8 +84,8 @@ Implemented in `web/components/ThinkingState.tsx` and `api/src/services/auth.ser
 - Block-scoped declarations (`const STAGES` in `ThinkingState.tsx` and `let user` in `auth.service.ts`) reside in the Temporal Dead Zone (TDZ) from the start of the block until declaration evaluation, preventing runtime access prior to initialization.
 
 ### 5.3 Server-side rendering
-Implemented in `web/app/layout.tsx` and `web/app/page.tsx`:
-- Next.js React Server Components (RSC) execute server-side on every request (`force-dynamic`) to generate and stream the initial HTML shell.
+Implemented in `web/pages/status.tsx`, `web/app/page.tsx`, and `web/app/ssr/page.tsx`:
+- Dynamic Server-Side Rendering (SSR) via classic Pages Router `getServerSideProps` and App Router on-demand dynamic React Server Components (`force-dynamic`). Delivers pre-rendered HTML integrating server-side headers, environment secrets, and backend API status.
 
 ### 5.4 Containerization with Docker
 - `web/Dockerfile`: Multi-stage Next.js production build container.
