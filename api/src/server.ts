@@ -1,9 +1,24 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import http from "http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { app } from "./app.js";
 import env from "./config.js";
 import { connectMongo } from "./db/mongo.js";
 import { setupScheduledJobs } from "./jobs/cron.js";
+
+/**
+ * ─────────────────────────────────────────────────────────────
+ * @concept Environment variables & secrets management
+ * ─────────────────────────────────────────────────────────────
+ * Server runtime initialization:
+ * - Bootstraps environment variables via `dotenv.config()`.
+ * - Resolves dynamic port binding from `process.env.PORT` (injected by host platform like Render).
+ * - Enforces fallback to validated `env.PORT` or default 4000.
+ * ─────────────────────────────────────────────────────────────
+ */
+const PORT = process.env.PORT || env.PORT || 4000;
 
 // Polyglot Persistence: initialize MongoDB connection if configured
 if (env.MONGODB_URI) {
@@ -46,14 +61,11 @@ wss.on("connection", (ws: WebSocket) => {
 /**
  * ─────────────────────────────────────────────────────────────
  * BACKEND DEPLOYMENT & PORT BINDING:
- * - Binds the HTTP and WebSocket servers to env.PORT.
+ * - Binds the HTTP and WebSocket servers to PORT.
  * - In local development: defaults to 4000.
- * - In Render deployment: Render dynamically injects process.env.PORT,
- *   which envSchema (zod) coerces into env.PORT.
- * - Render's public router maps external traffic (port 443 HTTPS)
- *   to this bound port.
+ * - In Render deployment: Render dynamically injects process.env.PORT.
  * ─────────────────────────────────────────────────────────────
  */
-server.listen(env.PORT, () => {
-  console.log(`rag99 api listening on http://localhost:${env.PORT}`);
+server.listen(PORT, () => {
+  console.log(`rag99 api listening on http://localhost:${PORT}`);
 });

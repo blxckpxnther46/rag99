@@ -27,10 +27,10 @@ export const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   
   // AI Provider Credentials & Configuration
-  AI_BASE_URL: z.string().url("AI_BASE_URL must be a valid URL"),
+  AI_BASE_URL: z.string().url("AI_BASE_URL must be a valid URL").default("https://openrouter.ai/api/v1"),
   AI_API_KEY: z.string().min(1, "AI_API_KEY is required"),
-  AI_CHAT_MODEL: z.string().min(1),
-  AI_EMBEDDING_MODEL: z.string().min(1),
+  AI_CHAT_MODEL: z.string().min(1).default("meta-llama/llama-3.3-70b-instruct"),
+  AI_EMBEDDING_MODEL: z.string().min(1).default("openai/text-embedding-3-small"),
   EMBEDDING_DIMENSION: z.coerce.number().int().positive().default(1024),
   GROQ_API_KEY: z.string().min(1).optional(),
   OPENROUTER_API_KEY: z.string().min(1).optional(),
@@ -45,6 +45,7 @@ export const envSchema = z.object({
   
   // Distributed Cache & Polyglot NoSQL Connection Secrets
   REDIS_URL: z.string().min(1).optional(),
+  MONGO_URI: z.string().min(1).optional(),
   MONGODB_URI: z.string().min(1).optional(),
   
   // Server Configuration
@@ -70,6 +71,13 @@ export function validateSecrets(): { valid: boolean; loadedCount: number } {
   return { valid: true, loadedCount: Object.keys(result.data).length };
 }
 
-const env = envSchema.parse(process.env);
+const parsedEnv = envSchema.parse(process.env);
+
+// Normalize MONGO_URI and MONGODB_URI
+if (!parsedEnv.MONGODB_URI && parsedEnv.MONGO_URI) {
+  parsedEnv.MONGODB_URI = parsedEnv.MONGO_URI;
+}
+
+const env = parsedEnv;
 
 export default env;

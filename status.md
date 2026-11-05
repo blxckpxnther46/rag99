@@ -46,29 +46,29 @@ This file documents the current successfully completed state, design choices, an
 
 ## 3. Environment Variables
 
-### Backend (`api/.env`)
+### Backend (`api/.env.example`)
 ```env
-DATABASE_URL="postgresql://neondb_owner:...@ep-...c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&connect_timeout=30"
-JWT_SECRET="replace-with-a-long-random-secret"
+DATABASE_URL="postgresql://user:password@localhost:5432/rag99?sslmode=require&connect_timeout=30"
+JWT_SECRET="replace-with-a-long-random-secret-at-least-32-characters"
 
 # Default Model Configs (Zod required fields)
 AI_BASE_URL="https://openrouter.ai/api/v1"
-AI_API_KEY="sk-or-v1-..."  # Your primary OpenRouter key
+AI_API_KEY="replace-with-openrouter-api-key"
 AI_CHAT_MODEL="meta-llama/llama-3.3-70b-instruct"
 AI_EMBEDDING_MODEL="openai/text-embedding-3-small"
-EMBEDDING_DIMENSION="1024"
+EMBEDDING_DIMENSION=1024
 
 # Cloudinary Credentials
-CLOUDINARY_CLOUD_NAME="..."
-CLOUDINARY_API_KEY="..."
-CLOUDINARY_API_SECRET="..."
+CLOUDINARY_CLOUD_NAME="your-cloudinary-cloud-name"
+CLOUDINARY_API_KEY="your-cloudinary-api-key"
+CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
 
 # Key Rotation Pool
-GROQ_API_KEY="gsk_..."
-OPENROUTER_API_KEY="sk-or-v1-..."
-OPENROUTER_API_KEY1="sk-or-v1-..."
-OPENROUTER_API_KEY2="sk-or-v1-..."
-OPENROUTER_API_KEY3="sk-or-v1-..."
+GROQ_API_KEY=""
+OPENROUTER_API_KEY=""
+OPENROUTER_API_KEY1=""
+OPENROUTER_API_KEY2=""
+OPENROUTER_API_KEY3=""
 ```
 
 ---
