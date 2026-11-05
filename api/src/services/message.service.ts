@@ -112,8 +112,10 @@ export async function ask(userId: string, chatId: string, content: string, mode:
       totalLatencyMs: Date.now() - startEmbed,
       providerUsed: "client-pool",
       retrievedChunkCount: matches.length,
-      // Token & Cost Monitoring: approximate token metrics (1 token ≈ 4 characters)
-      // Prompt tokens from user query and context
+      // @concept Token & cost monitoring
+      // 1. Token Estimation: Uses BPE tokenization heuristic: 1 token ≈ 4 characters.
+      // 2. Cost Projection: LLaMA 3.3 70B pricing (~.40 per 1M tokens = .0000004 / token).
+      // 3. Telemetry Storage: Persisted into MongoDB subdocument for FinOps analytics.
       promptTokens: Math.ceil((content.length + JSON.stringify(modelMessages).length) / 4),
       completionTokens: Math.ceil(result.answer.length / 4),
       totalTokens: Math.ceil((content.length + JSON.stringify(modelMessages).length + result.answer.length) / 4),

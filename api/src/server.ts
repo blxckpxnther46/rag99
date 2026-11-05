@@ -33,10 +33,22 @@ const server = http.createServer(app);
 
 /**
  * ─────────────────────────────────────────────────────────────
- * WebSocket / Real-Time Communication
+ * @concept WebSocket / real-time communication
  * ─────────────────────────────────────────────────────────────
- * Provides bidirectional real-time communication for live document
- * ingestion progress and streaming AI status updates.
+ * ARCHITECTURE & EXECUTION FLOW:
+ * 1. Protocol Upgrade:
+ *    - Attached to the existing Node HTTP server on path `/ws`.
+ *    - Upgrades standard HTTP GET requests (`Upgrade: websocket`) to full-duplex TCP connections.
+ * 2. Why Attach to the HTTP Server (Port Sharing):
+ *    - Avoids opening a second port, making it 100% cloud-deployment ready on single-port hosts like Render.
+ * 3. Bidirectional Messaging & Heartbeats:
+ *    - Pushes a connection handshake event `{ type: "connected" }` immediately upon client connect.
+ *    - Listens for client ping frames and returns `{ type: "pong", timestamp }` for latency and keep-alive checks.
+ * 4. RAG Ingestion & Real-Time Broadcasts:
+ *    - Provides an exported `wss` instance that allows background worker tasks to broadcast
+ *      live document ingestion milestones (PDF parse -> chunk -> vectorize -> write to pgvector)
+ *      directly to active client frontends without requiring inefficient client polling.
+ * ─────────────────────────────────────────────────────────────
  */
 export const wss = new WebSocketServer({ server, path: "/ws" });
 

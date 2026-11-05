@@ -93,6 +93,18 @@ orKeys.forEach((item) => {
 let rotationIndex = loadRotationIndex(indexPath);
 let embeddingIndex = loadRotationIndex(embedIndexPath);
 
+/**
+ * @concept 3rd-party API integration & LLM eval sets: Dynamic Provider Selection
+ * 
+ * 1. Heterogeneous Provider Pool:
+ *    - Targets include Groq (Llama-3.3-70B, sub-200ms latency) and OpenRouter (multi-vendor resilience).
+ * 2. Performance & Tool-Calling Integration:
+ *    - Enforces `response_format: { type: "json_object" }` so the LLM outputs strict JSON schemas,
+ *      allowing downstream function dispatch in `tools.ts` (`query_document_chunks`, `calculate_reading_time`).
+ * 3. Availability Failover Loop:
+ *    - If a provider returns 429 (rate limit) or 5xx (downtime), the loop catches the exception
+ *      and immediately attempts the next provider without dropping the user's request.
+ */
 export async function answerRotated(messages: unknown[]) {
   if (targets.length === 0) {
     throw new AppError(500, "No AI providers configured in client pool. Make sure you set GROQ_API_KEY or OPENROUTER_API_KEYs.");
