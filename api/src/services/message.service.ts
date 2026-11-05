@@ -1,3 +1,14 @@
+/**
+ * @concept Multi-step agent (Sequential vectorization, pgvector retrieval, prompt construction, LLM synthesis)
+ * @concept Token & cost monitoring (Token estimation, latency tracking, estimated USD expenditure in MongoDB)
+ *
+ * Implements the end-to-end RAG orchestrator:
+ * 1. Step 1: Query Vectorization (1024-dim embedding)
+ * 2. Step 2: Cosine Similarity Retrieval over pgvector with tenant isolation
+ * 3. Step 3: Prompt Construction with citation contracts and delimiter sandboxing
+ * 4. Step 4: LLM Synthesis with structured JSON schema and citation verification
+ * 5. Telemetry & Cost Monitoring: Captures tokens, latency, and estimated cost in MongoDB
+ */
 import { prisma } from "../db/prisma.js";
 import { embed, answer } from "../ai/ai-client.js";
 import { buildMessages, parseAnswer } from "../ai/prompt-builder.js";

@@ -1,3 +1,18 @@
+/**
+ * @concept 3rd-party API integration (Groq Cloud & OpenRouter AI integrations)
+ * @concept LLM eval sets (Multi-provider client pool with availability failover & tool execution)
+ *
+ * MULTI-PROVIDER AI CLIENT POOL ARCHITECTURE:
+ * 1. Provider Heterogeneity & Performance Routing:
+ *    - Groq: High-throughput, sub-200ms latency inference (Llama-3.3-70B-Versatile) for fast tool calling.
+ *    - OpenRouter: Multi-model hub providing Llama-3.3-70B-Instruct and text-embedding-3-small (1024-dim).
+ * 2. Availability Failover Loop:
+ *    - In `answerRotated` and `embedRotated`, requests dynamically fail over across provider targets
+ *      if a 429 (Rate Limit) or 5xx (Downtime) occurs.
+ * 3. Connection to Function Calling / Tool Use:
+ *    - Targets enforce structured JSON output schemas (`response_format: { type: "json_object" }`),
+ *      allowing reliable parsing of arguments for downstream tools defined in `tools.ts`.
+ */
 import { cache } from "../db/cache.js";
 import fs from "node:fs";
 import path from "node:path";

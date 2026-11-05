@@ -114,6 +114,18 @@ function createTokenResponse(user: { id: string; email: string; name: string }) 
   };
 }
 
+/**
+ * @concept OAuth / 3rd-party login (Federated identity via Google Identity Services)
+ * @concept 3rd-party API integration (Server-to-server token verification against Google OAuth2 API)
+ *
+ * 1. Third-Party Verification:
+ *    - Makes HTTPS GET to https://oauth2.googleapis.com/tokeninfo?id_token=${credential}
+ *    - Validates audience (aud === env.GOOGLE_CLIENT_ID) to prevent Cross-Client Token Forgery.
+ *    - Verifies email_verified claim before trusting user identity.
+ * 2. Account Provisioning & Session:
+ *    - Finds existing user by email or provisions a new user record with Prisma in PostgreSQL.
+ *    - Issues our own signed JWT (HMAC-SHA256) for stateful/sessionless authentication.
+ */
 export async function loginWithGoogle(credential: string) {
   if (!env.GOOGLE_CLIENT_ID) {
     throw new AppError(500, "Google OAuth is not configured on this server.");
