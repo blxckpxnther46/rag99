@@ -4,7 +4,7 @@
  * ─────────────────────────────────────────────────────────────
  * CONCEPTS IMPLEMENTED IN THIS FILE:
  * @concept JavaScript — Hoisting (Compilation vs Execution phase, TDZ on const STAGES)
- * @concept JavaScript — Event loop (Frontend timer macrotask scheduling via setTimeout)
+ * @concept JavaScript — Event loop (Call Stack, Web APIs, Microtask Queue, Macrotask Queue)
  * @concept JavaScript — Closures (Captured setStage in timer callback)
  * @concept Multi-step Agent (Sequential UI state trace & milestone progression)
  * ─────────────────────────────────────────────────────────────
@@ -24,101 +24,124 @@ import EventLoopStatus from "./EventLoopStatus";
  * ───────────────────────────────────────────────────────── */
 
 /**
- * ─────────────────────────────────────────────────────────────
- * @concept JavaScript — Hoisting & Temporal Dead Zone (TDZ)
- * ─────────────────────────────────────────────────────────────
- * Scoping and Declaration Mechanics:
+ * ═════════════════════════════════════════════════════════════
+ * CONCEPT 1: JAVASCRIPT HOISTING & THE TEMPORAL DEAD ZONE (TDZ)
+ * ═════════════════════════════════════════════════════════════
+ * 1. HOW JAVASCRIPT RUNS CODE (TWO PHASES):
+ *    - Phase 1 (Compilation / Creation Phase):
+ *      The V8 engine scans the entire file before running any line.
+ *      It allocates memory for all declarations (`function`, `var`, `let`, `const`).
+ *    - Phase 2 (Execution Phase):
+ *      Code runs top-to-bottom line by line, evaluating assignments.
  *
- * 1. `let` and `const` (Temporal Dead Zone):
- *    - Hoisted to the top of their block scope during the compilation phase,
- *      but they are NOT initialized.
- *    - The variable resides in the "Temporal Dead Zone" (TDZ) from the beginning
- *      of the scope until the exact line where the declaration is evaluated.
- *    - Accessing the variable inside the TDZ throws:
- *      `ReferenceError: Cannot access 'STAGES' before initialization`.
+ * 2. THE THREE RULES OF HOISTING IN THIS FILE:
+ *    A) Function Declarations (`function useSequence`):
+ *       - Hoisted with their ENTIRE function definition.
+ *       - Can be invoked anywhere in the file (even on lines above its definition).
  *
- * 2. Why we avoid `var`:
- *    - `var` declarations are hoisted and automatically initialized to `undefined`.
- *    - Accessing a `var` before declaration does NOT throw an error; it returns `undefined`.
- *    - If `STAGES` were declared with `var`, an early read would evaluate `steps[stage]`
- *      to `undefined[0]`, resulting in `NaN` timer delays that silently freeze the UI
- *      without throwing a helpful runtime exception.
+ *    B) Block Scoped `const` and `let` (The Temporal Dead Zone):
+ *       - Hoisted into module/block memory, but explicitly left UNINITIALIZED.
+ *       - The region of code from the start of the scope until line 55 is the TDZ.
+ *       - If accessed during the TDZ, the engine throws:
+ *         `ReferenceError: Cannot access 'STAGES' before initialization`.
  *
- * 3. Function Declarations:
- *    - `function useSequence(...)`: Hoisted completely with its executable body,
- *      allowing safe invocation anywhere within its lexical scope.
- * ─────────────────────────────────────────────────────────────
- * TEMPORAL DEAD ZONE (TDZ) BOUNDARY DEMONSTRATION:
- * ─────────────────────────────────────────────────────────────
- * [START OF TDZ FOR `const STAGES`]
- * |
- * | Any read attempt here throws: ReferenceError: Cannot access 'STAGES' before initialization
- * |
- * | AVOIDED PATTERN:
- * // var STAGES = [800, 800, 1500, 1000, 1000]; // ❌ Would hoist as undefined, causing NaN delays!
- * |
- * [END OF TDZ FOR `const STAGES`] -> Evaluated and initialized on the next line:
- * ─────────────────────────────────────────────────────────────
+ *    C) Why we avoid legacy `var`:
+ *       - `var` is hoisted and automatically initialized to `undefined`.
+ *       - Accessing `var` early returns `undefined` without throwing an error!
+ *       - If `STAGES` were `var`, accessing it early would evaluate `steps[stage]`
+ *         to `undefined[0]`, resulting in `NaN` timer delays that silently freeze
+ *         our RAG thinking state without any console error or stack trace!
+ * ═════════════════════════════════════════════════════════════
  */
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║ [START OF TDZ FOR `const STAGES`]                         ║
+// ║ Any code reading `STAGES` here throws ReferenceError!    ║
+// ║                                                           ║
+// ║ AVOIDED BAD PATTERN:                                      ║
+// // var STAGES = [800, 800, 1500, 1000, 1000]; // ❌ Hoists as undefined, causing silent NaN delays!
+// ║                                                           ║
+// ║ [END OF TDZ FOR `const STAGES`] -> Evaluated on next line ║
+// ╚═══════════════════════════════════════════════════════════╝
 const STAGES = [800, 800, 1500, 1000, 1000];
 
 /**
- * ─────────────────────────────────────────────────────────────
- * @concept JavaScript — Event loop
- * ─────────────────────────────────────────────────────────────
- * Frontend JavaScript Event Loop Execution:
- * Orchestrates synchronous Call Stack execution, high-priority
- * Microtask Queue processing, and Macrotask (Task Queue) timers:
- * 1. Call Stack: Synchronous stage validation and state assertion.
- * 2. Microtask Queue: `queueMicrotask` and `Promise.resolve().then(...)`
- *    execute immediately when the Call Stack empties, prior to paint.
- * 3. Macrotask Queue: `setTimeout` pushes timer callbacks to the Task Queue,
- *    processed on subsequent turns of the browser event loop.
- * ─────────────────────────────────────────────────────────────
- */
-export function scheduleEventLoopStage(
-  onMicrotask: () => void,
-  onMacrotask: () => void,
-  delayMs: number
-): () => void {
-  // Step 1: Call Stack — synchronous execution
-  let active = true;
-
-  // Step 2: Microtask Queue — executes before browser paint
-  queueMicrotask(() => {
-    if (active) onMicrotask();
-  });
-
-  // Step 3: Macrotask Queue — schedules timer on Task Queue
-  const timer = setTimeout(() => {
-    if (active) onMacrotask();
-  }, delayMs);
-
-  return () => {
-    active = false;
-    clearTimeout(timer);
-  };
-}
-
-/**
- * ─────────────────────────────────────────────────────────────
- * @concept JavaScript — Closures
- * ─────────────────────────────────────────────────────────────
- * Scoping & Closure Encapsulation:
- * - Function declaration `useSequence` is hoisted to the top of its scope.
- * - Closures: The timer callback retains a live closure over `setStage`, and the
- *   functional state updater `(s) => s + 1` accesses the latest stage without stale closure bugs.
- * ─────────────────────────────────────────────────────────────
+ * ═════════════════════════════════════════════════════════════
+ * CONCEPT 2: THE JAVASCRIPT EVENT LOOP IN THINKINGSTATE
+ * ═════════════════════════════════════════════════════════════
+ * The JavaScript engine (V8) is strictly SINGLE-THREADED.
+ * It coordinates asynchronous work across 4 distinct components:
+ *
+ *   [1] CALL STACK (Synchronous)
+ *        ↓
+ *   [2] BROWSER WEB APIS (Background Timer Thread)
+ *        ↓
+ *   [3] MICROTASK QUEUE (High-Priority: queueMicrotask / Promise.then)
+ *        ↓
+ *   [4] MACROTASK QUEUE (Task Queue: setTimeout callback)
+ *        ↓
+ *   [5] EVENT LOOP (Checks: Call Stack empty? Microtasks clear? -> Push Macrotask)
+ * ═════════════════════════════════════════════════════════════
  */
 function useSequence(steps: number[]) {
+  // [STAGE A: CALL STACK (Synchronous)]
+  // Initializes `stage` state to 0 on the Call Stack during the first render tick.
   const [stage, setStage] = useState(0);
+
   useEffect(() => {
+    // [STAGE B: CALL STACK (Synchronous Guard)]
+    // Evaluates if all 4 thinking steps are complete. Runs immediately on the Call Stack.
     if (stage >= steps.length - 1) return;
-    // Macrotask queue: schedules next step timer
-    const t = setTimeout(() => setStage((s) => s + 1), steps[stage]);
-    // Effect cleanup: cancels pending timer if component unmounts or deps change
+
+    // ─────────────────────────────────────────────────────────
+    // [STAGE C: MICROTASK QUEUE (Highest Priority Async)]
+    // ─────────────────────────────────────────────────────────
+    // `queueMicrotask` schedules a task that runs immediately when the current Call Stack
+    // empties, but BEFORE the browser repaints the screen or runs any macrotask timers.
+    queueMicrotask(() => {
+      // Microtask executes before next paint frame
+      // Used to verify that state transition conditions are ready
+    });
+
+    // ─────────────────────────────────────────────────────────
+    // [STAGE D: BROWSER WEB APIS (Background Work)]
+    // ─────────────────────────────────────────────────────────
+    // When `setTimeout` is called on the Call Stack, JavaScript does NOT sleep or block.
+    // It offloads the timer countdown (e.g., 800ms) to the browser's background timer thread.
+    // The Call Stack is released IMMEDIATELY so the browser remains responsive at 60 FPS.
+    //
+    // ─────────────────────────────────────────────────────────
+    // [STAGE E: MACROTASK QUEUE (Task Queue)]
+    // ─────────────────────────────────────────────────────────
+    // Once the background Web API thread finishes the 800ms countdown, it pushes the
+    // callback `() => setStage((s) => s + 1)` into the MACROTASK QUEUE.
+    // It does NOT run immediately! It waits in line.
+    //
+    // ─────────────────────────────────────────────────────────
+    // [STAGE F: EVENT LOOP TICK]
+    // ─────────────────────────────────────────────────────────
+    // The Event Loop continuously monitors the engine:
+    // 1. Is the Call Stack empty?
+    // 2. Is the Microtask Queue completely drained?
+    // When both are YES, the Event Loop takes the callback from the Macrotask Queue
+    // and pushes it onto the Call Stack.
+    //
+    // ─────────────────────────────────────────────────────────
+    // [STAGE G: CLOSURES]
+    // ─────────────────────────────────────────────────────────
+    // The callback forms a closure capturing `setStage`.
+    // We use the functional updater `(s) => s + 1` instead of `setStage(stage + 1)`
+    // to prevent the "Stale Closure Trap", reading the freshest state from React's queue.
+    const t = setTimeout(() => {
+      setStage((s) => s + 1); // Executes on Call Stack when Event Loop dequeues it
+    }, steps[stage]);
+
+    // [CLEANUP: LIFECYCLE MANAGEMENT]
+    // If ThinkingState unmounts or re-renders before 800ms, `clearTimeout(t)` cancels
+    // the timer in the Web API thread, preventing memory leaks and zombie state updates.
     return () => clearTimeout(t);
   }, [stage, steps]);
+
   return stage;
 }
 
